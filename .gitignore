@@ -1,0 +1,5 @@
+# Repository boundary: the repository carries the build.
+
+# Credentials and local overrides.
+.env
+.env.*
