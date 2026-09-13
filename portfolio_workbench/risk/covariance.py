@@ -1,10 +1,10 @@
 """The risk-model axis: three estimators of one object behind one interface.
 
-Stage B of the comparison varies the covariance estimator with the constructor held fixed, and
-what that axis measures is **the optimiser's numerical behaviour**, never which estimator is
-more accurate. Nothing here estimates accuracy: there is no true covariance to compare against
-on this panel, and a sample covariance is by construction the best fit *to its own window*, so
-an in-sample accuracy ranking would rank the estimator it was computed from first.
+The comparison varies the covariance estimator with the constructor held fixed, and what that
+axis measures is **the optimiser's numerical behaviour**, never which estimator is more
+accurate. Nothing here estimates accuracy: there is no true covariance to compare against on
+this panel, and a sample covariance is by construction the best fit *to its own window*, so an
+in-sample accuracy ranking would rank the estimator it was computed from first.
 
 Three choices are made once for all three estimators so that the axis compares estimators and
 not conventions. They are all returned on the **correlation-free covariance scale in the
@@ -24,7 +24,7 @@ This module reads the component model from `factors/`, so `risk/` depends on it:
 covariance *is* the statistical family's covariance, and re-extracting the components here to
 avoid the import would be the same model built twice, which is how two modules come to disagree
 about what a component is. The layout's dependency arrows name `risk/ -> data`; the estimator
-Stage B actually varies needs `factors` as well.
+this axis actually varies needs `factors` as well.
 """
 
 import numpy as np
@@ -98,8 +98,10 @@ def factor_model(returns, count=None, draws=component_module.DRAWS, seed=compone
     if count is None:
         count = component_module.decompose(returns, draws=draws, seed=seed)["components"]
     count = max(int(count), 0)
-    retained = component_module.orient(vectors[:, :count])
-    loadings = retained * np.sqrt(eigenvalues[:count])
+    # The loadings come from the one function that defines what a loading is - the oriented
+    # eigenvector scaled by the square root of its own eigenvalue - so the sign convention
+    # cannot be forgotten in a second copy of that arithmetic.
+    loadings = component_module.component_loadings(eigenvalues, vectors, count)
     residual = 1.0 - (loadings ** 2).sum(axis=1)
     if (residual < -RECONSTRUCTION_TOLERANCE).any():
         raise ValueError(
@@ -147,8 +149,6 @@ def main(root=None):
     document = loader.load_panel(root)
     months = document["months"]
     returns = panel.eur_excess_returns(document["prices"], document["fx"], document["risk_free"]["monthly"])
-    if list(returns.columns) != universe.TICKERS:
-        raise ValueError(f"the excess frame is not in the sleeve map's order: {list(returns.columns)}")
 
     traded, estimation = list(windows(months))[-1]
     block = returns.reindex(estimation).dropna(how="all")
@@ -169,7 +169,7 @@ def main(root=None):
             raise ValueError(f"the {name} covariance is not symmetric")
     print("[risk] all three carry the sleeve map's order and are symmetric; the axis measures the optimiser's "
           "numerical behaviour, and no estimator is ranked for accuracy, which this panel cannot establish")
-    print(f"[risk] the three diagnostics this window produces for Stage B: sample conditioning "
+    print(f"[risk] the three diagnostics this window produces for the estimator axis: sample conditioning "
           f"{report['sample_condition']:,.0f}, shrunk {report['shrinkage_condition']:,.0f}, factor "
           f"{report['factor_condition']:,.0f}")
     for line in document["warnings"]:

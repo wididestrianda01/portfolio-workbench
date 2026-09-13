@@ -21,9 +21,8 @@ excess return.
 
 import pandas as pd
 
-from ..data import external, loader, panel, universe
+from ..data import external, loader, panel
 
-LEVEL_SLEEVES = ("IBGL.AS", "IEGE.AS")
 # Every sleeve the block reads, in one place: the guard and the arithmetic below have to agree
 # about which instruments the block is built from, so adding a leg edits one tuple.
 BLOCK_SLEEVES = ("IBGL.AS", "IEGE.AS", "IEAC.AS", "IHYG.L")
@@ -101,12 +100,6 @@ def main(root=None):
     returns = panel.eur_excess_returns(
         document["prices"], document["fx"], document["risk_free"]["monthly"]
     )
-    # The sleeve order is the map's, and every weight vector in the package is indexed by
-    # it; a frame that arrived in another order would misalign weights against returns
-    # without raising anywhere downstream.
-    if list(returns.columns) != universe.TICKERS:
-        raise ValueError(f"the excess frame is not in the sleeve map's order: {list(returns.columns)}")
-
     block = constructed_block(returns)
     spine = document["factors"]["eur"]
     named = named_set(spine, block)

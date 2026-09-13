@@ -1,7 +1,8 @@
 """One end-to-end run on the frozen snapshot, asserting the structure the layer rests on.
 
-This is the fixture later phases extend: the structural checks a reader is asked to take on trust are
-asserted here rather than left in prose, so a change that breaks one of them fails one command.
+This is the fixture the rest of the suite extends: the structural checks a reader is asked to
+take on trust are asserted here rather than left in prose, so a change that breaks one of them
+fails one command.
 """
 
 import numpy as np
