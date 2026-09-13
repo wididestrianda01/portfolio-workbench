@@ -14,7 +14,7 @@ import re
 import pandas as pd
 
 from . import panel
-from .universe import SLEEVES, WINDOW_END, WINDOW_START
+from .universe import SLEEVES, WINDOW_START
 
 # A monthly move beyond the bound stated for that sleeve is a data fault rather than a
 # market event at these sizes, and the bound travels per sleeve because the sleeves do not
@@ -217,14 +217,20 @@ def stop_implausible_prices(frame):
 
 # ---------------------------------------------------------------------------- warnings
 def warn_tr_divergence(frame, tolerance=TR_DIVERGENCE):
-    """The feed's adjustment against total return rebuilt from close plus distributions."""
+    """The feed's adjustment against total return rebuilt from close plus distributions.
+
+    Both series come from `panel` rather than being rebuilt here: the recomputation is a
+    documented data rule, and a second copy of it beside the first is how the two come to
+    disagree about the same panel.
+    """
+    feed_series = panel.total_return(panel.wide(frame, "adj_close"))
+    rebuilt_series = panel.recomputed_total_return(panel.wide(frame, "close"), panel.wide(frame, "dividend"))
     out = []
-    for instrument, block in frame.groupby("instrument"):
-        block = block.sort_values("period_month")
-        feed = float((1.0 + block["adj_close"].pct_change().fillna(0.0)).prod() - 1.0)
-        rebuilt = float(
-            ((block["close"] + block["dividend"].fillna(0.0)) / block["close"].shift(1)).fillna(1.0).prod() - 1.0
-        )
+    for instrument in feed_series.columns:
+        # A month the series cannot price carries no return, so it contributes nothing to
+        # either cumulative figure rather than a fabricated zero.
+        feed = float((1.0 + feed_series[instrument].dropna()).prod() - 1.0)
+        rebuilt = float((1.0 + rebuilt_series[instrument].dropna()).prod() - 1.0)
         if abs(feed - rebuilt) > tolerance:
             out.append(
                 f"WARNING recomputed-TR divergence: {instrument} adjusted close implies {feed:+.2%} "
@@ -332,14 +338,3 @@ def run(frame, facts, as_of, factor_months=None, rates=None):
         months = pd.PeriodIndex(frame["period_month"].drop_duplicates(), freq="M")
         warnings += warn_factor_trim(months, factor_months)
     return warnings
-
-
-def assert_within_window(frame, end=WINDOW_END):
-    """The window is declared; a frame running past it is refused rather than trimmed."""
-    months = pd.PeriodIndex(frame["period_month"].drop_duplicates(), freq="M")
-    if len(months) and months.max() > pd.Period(end, freq="M"):
-        raise DataStop(
-            "bar beyond the declared window",
-            f"the panel runs to {months.max()} but the window closes at {end}",
-        )
-    return frame

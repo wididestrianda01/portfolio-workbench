@@ -43,6 +43,20 @@ def as_of(frame, when, column="available_from"):
     return frame[frame[column] <= cutoff(when)]
 
 
+def available_months(index, when):
+    """The existing months a reader standing at `when` could have seen.
+
+    The same rule as `as_of`, for the legs that carry no `available_from` column because
+    they are month-labelled already: the factor library and the accrued overnight rate.
+    A month is readable from the first day of the next one, so a reader standing inside
+    month M sees up to M-1. Applied by the loader to every leg, because a leg that
+    skipped it would be the one look-ahead path into the package that the availability
+    rule exists to close.
+    """
+    months = pd.PeriodIndex(index, freq="M")
+    return months[months < cutoff(when).to_period("M")]
+
+
 def wide(frame, value="adj_close"):
     """Long table to one column per instrument, indexed by period month."""
     out = frame.pivot(index="period_month", columns="instrument", values=value)

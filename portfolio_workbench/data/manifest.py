@@ -31,12 +31,14 @@ def sha256(path):
 
 
 def measure(path):
-    """Row count and date range of one artifact, read from the artifact itself.
+    """Row count, date range and vintage of one artifact, read from the artifact itself.
 
     Both the central-bank CSVs and the price files carry one ISO date per row, so the
     range is a string comparison and no date library is needed to verify a file.
     The factor archives are counted on their monthly rows, which is the count the
-    analytics consume.
+    analytics consume, and they carry the library's vintage stamp on their first line,
+    which is returned so the manifest can state which vintage every result is keyed to
+    rather than leaving it to be recovered by each load.
 
     A file that does not parse is refused here rather than left to raise: the parser's
     own fault type is translated into this module's, so every way a snapshot can be wrong
@@ -52,7 +54,7 @@ def measure(path):
             raise ManifestError(f"{path.name}: {fault}") from fault
         if frame.empty:
             raise ManifestError(f"{path.name}: the factor archive holds no monthly rows")
-        return len(frame), str(frame.index[0]), str(frame.index[-1])
+        return len(frame), str(frame.index[0]), str(frame.index[-1]), frame.attrs.get("vintage")
 
     with open(path, newline="", encoding="utf-8") as handle:
         reader = csv.reader(handle)
@@ -66,15 +68,20 @@ def measure(path):
         dates = [row[index] for row in reader if len(row) > index and row[index].strip()]
     if not dates:
         raise ManifestError(f"{path.name}: no dated rows")
-    return len(dates), min(dates), max(dates)
+    return len(dates), min(dates), max(dates), None
 
 
 def describe(root, relative, role, source, url, retrieved, **extra):
-    """One manifest entry for one file, measured rather than asserted."""
+    """One manifest entry for one file, measured rather than asserted.
+
+    The vintage a factor archive carries is recorded here for the same reason the row
+    count is: a result is keyed to the snapshot, and a snapshot that cannot say which
+    library vintage its factors came from is missing part of what it is keyed to.
+    """
     path = Path(root) / relative
     if not path.exists():
         raise ManifestError(f"{relative}: listed for the snapshot but not present")
-    rows, first, last = measure(path)
+    rows, first, last, vintage = measure(path)
     entry = {
         "path": relative,
         "role": role,
@@ -86,6 +93,8 @@ def describe(root, relative, role, source, url, retrieved, **extra):
         "last": last,
         "sha256": sha256(path),
     }
+    if vintage is not None:
+        entry["vintage"] = vintage
     entry.update(extra)
     return entry
 
@@ -133,10 +142,15 @@ def verify(root):
                 f"{entry['path']}: sha256 {actual[:12]} does not match the manifest "
                 f"{entry['sha256'][:12]}; the snapshot is not the one the results were keyed to"
             )
-        rows, first, last = measure(path)
+        rows, first, last, vintage = measure(path)
         if (rows, first, last) != (entry["rows"], entry["first"], entry["last"]):
             raise ManifestError(
                 f"{entry['path']}: manifest says {entry['rows']} rows {entry['first']}..{entry['last']}, "
                 f"file holds {rows} rows {first}..{last}"
+            )
+        if entry.get("vintage") is not None and entry["vintage"] != vintage:
+            raise ManifestError(
+                f"{entry['path']}: manifest says the vintage is {entry['vintage']!r}, the file says "
+                f"{vintage!r}; the snapshot is not the one the results were keyed to"
             )
     return document

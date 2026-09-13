@@ -27,6 +27,9 @@ SLEEVES = {
     "XEON.DE": ("cash", "EUR"),
 }
 
+# Sleeve to group, which is the grouping the declared risk budget and the allocation view
+# both key on: those names are the budget's four keys, so this map is the only place the
+# two are joined and it is read by the whole risk-budget axis rather than by this module.
 GROUP = {
     "equity_dev": "equity",
     "equity_eu": "equity",
@@ -48,7 +51,6 @@ GROUP = {
 FX_QUOTES = {"EURUSD=X": "USD", "EURSEK=X": "SEK"}
 
 TICKERS = list(SLEEVES)
-GROUPS = [GROUP[SLEEVES[t][0]] for t in TICKERS]
 
 # The strategic policy weights, summing to one. They define the benchmark the whole
 # comparison is measured against, and they are fixed rather than optimised: a
@@ -75,7 +77,7 @@ RISK_BUDGET = {"equity": 0.55, "government": 0.20, "credit": 0.15, "real_and_cas
 # stops one month earlier because the factor library's newest month is the month
 # before the last completed price month.
 WINDOW_START, WINDOW_END = "2010-09", "2026-08"
-PANEL_START, PANEL_END = "2010-09", "2026-07"
+PANEL_START = "2010-09"
 
 # The constraint set, the cost rate and the estimation window are declared with the
 # modules that apply them: they parameterise a construction and an evaluation, not this

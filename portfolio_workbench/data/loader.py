@@ -81,9 +81,13 @@ def _role_path(document, role):
     raise quality.DataStop("missing file", f"the snapshot carries no file with role '{role}'")
 
 
-def load_factors(root):
-    """The fundamental spine, quoted and euro-translated, with the FX level behind it."""
-    document = manifest.verify(root)
+def load_factors(root, document):
+    """The fundamental spine, quoted and euro-translated, with the FX level behind it.
+
+    The verified manifest is passed in rather than re-derived: the whole snapshot is
+    hashed on every load, and a leg that verified it again would hash every file once
+    more for an answer its caller already holds.
+    """
     frames = {
         entry["path"]: Path(root) / entry["path"]
         for entry in document["files"]
@@ -127,9 +131,8 @@ def load_factors(root):
     }
 
 
-def load_risk_free(root):
+def load_risk_free(root, document):
     """The overnight rate, spliced and accrued into monthly returns, with the basis."""
-    document = manifest.verify(root)
     eonia = external.read_ecb_csv(Path(root) / _role_path(document, "ecb_eonia"))
     estr = external.read_ecb_csv(Path(root) / _role_path(document, "ecb_estr"))
     daily, basis_bp, overlap = external.splice_risk_free(eonia, estr)
@@ -179,8 +182,8 @@ def load_panel(root=None, as_of=None):
     prices = _load_role(root, document, "price", REQUIRED_PRICE_COLUMNS, "price")
     fx = _load_role(root, document, "fx", REQUIRED_FX_COLUMNS, "fx")
     facts = document.get("instruments", {})
-    factors = load_factors(root)
-    risk_free = load_risk_free(root)
+    factors = load_factors(root, document)
+    risk_free = load_risk_free(root, document)
 
     # The gate runs on the panel as the snapshot holds it, before the declared window
     # trims anything: a bar that should never have been fetched is a fetch fault, and
@@ -193,6 +196,24 @@ def load_panel(root=None, as_of=None):
     if as_of is not None:
         prices = panel.as_of(prices, as_of)
         fx = panel.as_of(fx, as_of)
+        # The factor and rate legs carry no `available_from` column, so the same rule is
+        # applied to their month labels. Every leg is gated, because a reader told that the
+        # legs come back as they could have seen them has to be able to rely on it for the
+        # leg they happen to read.
+        kept = panel.available_months(factors["eur"].index, as_of)
+        factors = {
+            **factors,
+            "usd": factors["usd"].loc[factors["usd"].index.intersection(kept)],
+            "eur": factors["eur"].loc[factors["eur"].index.intersection(kept)],
+            "europe_usd": factors["europe_usd"].loc[factors["europe_usd"].index.intersection(kept)],
+            "fx_level": factors["fx_level"].loc[factors["fx_level"].index.intersection(kept)],
+        }
+        monthly = panel.available_months(risk_free["monthly"].index, as_of)
+        risk_free = {
+            **risk_free,
+            "monthly": risk_free["monthly"].loc[monthly],
+            "daily": risk_free["daily"][risk_free["daily"].index <= panel.cutoff(as_of)],
+        }
 
     months = panel.joined_months(
         prices["period_month"].drop_duplicates(),

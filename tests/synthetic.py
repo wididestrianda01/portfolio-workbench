@@ -17,7 +17,13 @@ import numpy as np
 import pandas as pd
 
 from portfolio_workbench.data import manifest
-from portfolio_workbench.data.universe import SLEEVES, TICKERS, WINDOW_END, WINDOW_START
+from portfolio_workbench.data.universe import (
+    FX_QUOTES,
+    SLEEVES,
+    TICKERS,
+    WINDOW_END,
+    WINDOW_START,
+)
 
 SEED = 20260912
 CREATED = "2026-09-13T09:00:00+00:00"
@@ -177,7 +183,7 @@ def build(root, partial_month=False, late_start=None, dividend_blind=None, gap=N
         entries.append(
             manifest.describe(
                 root, relative, "fx", "Yahoo Finance monthly bars", f"https://finance.yahoo.com/quote/{ticker}/history",
-                CREATED, instrument=ticker, currency=ticker[-3:],
+                CREATED, instrument=ticker, currency=FX_QUOTES[ticker],
             )
         )
 
