@@ -8,7 +8,8 @@ embargo is a property of the access path rather than a rule each caller remember
 
 import pandas as pd
 
-from .universe import PANEL_START, WINDOW_END
+from . import external
+from .universe import FX_QUOTES, PANEL_START, TICKERS, WINDOW_END
 
 
 def add_availability(frame, date_col="date"):
@@ -66,6 +67,60 @@ def recomputed_total_return(close_wide, dividend_wide):
     how a dividend-blind line is caught mechanically rather than by eye.
     """
     return (close_wide + dividend_wide.fillna(0.0)) / close_wide.shift(1) - 1.0
+
+
+def eur_excess_returns(prices, fx, risk_free, value="adj_close"):
+    """The sleeve frame every factor result is measured on: EUR total returns in excess of
+    the euro overnight rate.
+
+    Four things this has a quiet wrong version of. The return is the feed's adjusted close
+    ratio, so it is already a total return in the instrument's own denomination. A line
+    quoted in another currency is translated with the same multiplicative rule the factor
+    spine uses - divide by that currency's own leg, never multiply, and never translate a
+    line with another line's currency. The cash rate is subtracted, because every factor in
+    the model is an excess return or a spread and a left-hand side measured gross would
+    carry the cash rate into the intercept. And the month the panel's first bar cannot
+    produce is dropped as a structural absence while any other missing month is refused:
+    a filled zero is a fabricated observation, and it would enter every window containing it.
+    """
+    # The panel's first bar has no predecessor, so its return does not exist. Dropped here
+    # rather than filled: a leg cannot translate a return that is not there, and a filled
+    # zero would enter every window containing it.
+    local = total_return(wide(prices, value)).iloc[1:]
+    quotes = prices.groupby("instrument")["currency"].first()
+    fx_returns = total_return(wide(fx, "close")).iloc[1:]
+    returns = local.copy()
+    for instrument, quote in quotes.items():
+        if quote == "EUR":
+            continue
+        leg_name = next((name for name, currency in FX_QUOTES.items() if currency == quote), None)
+        if leg_name is None or leg_name not in fx_returns.columns:
+            raise ValueError(f"{instrument} is quoted in {quote} and the snapshot carries no {quote} leg")
+        returns[instrument] = external.eur_translate(local[[instrument]], fx_returns[leg_name])[instrument]
+
+    rate = risk_free.copy()
+    if isinstance(rate.index, pd.PeriodIndex):
+        rate.index = rate.index.to_timestamp(how="start")
+    rate = rate.reindex(returns.index)
+    if rate.isna().any():
+        raise ValueError(f"the risk-free series does not cover {list(rate.index[rate.isna()][:3])}")
+    excess = returns.sub(rate, axis=0)
+
+    uncomputed = excess.index[excess.isna().any(axis=1)]
+    structural = len(uncomputed) == 1 and uncomputed[0] == excess.index[0]
+    if len(uncomputed) and not structural:
+        raise ValueError(f"the return frame holds months it cannot compute: {list(uncomputed[:3])}")
+    excess = excess.loc[~excess.isna().any(axis=1)]
+    # The pivot labels rows with the month's first day; the factor spine and the joined panel
+    # are labelled with the month itself. One representation across every analytics frame, so
+    # a join between them cannot silently come back empty.
+    excess.index = pd.PeriodIndex(excess.index, freq="M")
+    # The pivot sorts its columns; the sleeve map's order is the one weights are indexed by,
+    # so the frame comes back in that order when it carries that universe. A partial frame
+    # is left alone rather than silently reordered, so a fixture keeps the order it declared.
+    names = list(excess.columns)
+    order = [name for name in TICKERS if name in names]
+    return excess[order] if len(order) == len(names) else excess
 
 
 def joined_months(price_months, factor_months, risk_free_months):

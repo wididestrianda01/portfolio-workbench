@@ -274,9 +274,11 @@ def warn_factor_trim(price_months, factor_months):
     lost = prices.difference(factors)
     if len(lost):
         return [
-            f"WARNING factor month trims the panel: prices reach {prices.max()}, factors stop at "
-            f"{factors.max()}; {len(lost)} price months ({lost.min()}..{lost.max()}) are outside the "
-            f"joined panel"
+            (
+                f"WARNING factor month trims the panel: prices reach {prices.max()}, factors stop at "
+                f"{factors.max()}; {len(lost)} price months ({lost.min()}..{lost.max()}) are outside the "
+                f"joined panel"
+            )
         ]
     return []
 

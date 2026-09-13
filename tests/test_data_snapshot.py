@@ -2,11 +2,12 @@
 
 import json
 
+import numpy as np
 import pandas as pd
 import pytest
 from synthetic import _french_zip, build
 
-from portfolio_workbench.data import loader, manifest, quality
+from portfolio_workbench.data import loader, manifest, panel, quality, universe
 
 
 @pytest.fixture(scope="module")
@@ -131,3 +132,31 @@ def test_missing_bar_is_refused(tmp_path):
         loader.load_panel(root)
     assert stop.value.rule == "missing bar"
     assert "2016-04" in stop.value.detail
+
+
+def test_the_excess_frame_translates_the_foreign_line_and_subtracts_the_cash_rate(frozen):
+    """Hand-rebuilt from the same snapshot, one line per sleeve: a euro line is its own total return
+    less the overnight rate, and the one line quoted in another currency is translated by dividing
+    by its own currency leg - multiplying would invert the currency basis, and translating it with
+    the other leg's rate would use a rate that has nothing to do with it."""
+    document = loader.load_panel(frozen)
+    prices, fx = document["prices"], document["fx"]
+    excess = panel.eur_excess_returns(prices, fx, document["risk_free"]["monthly"])
+
+    local = panel.total_return(panel.wide(prices, "adj_close")).iloc[1:]
+    fx_returns = panel.total_return(panel.wide(fx, "close")).iloc[1:]
+    translated = local.copy()
+    translated["XACT-NORDEN.ST"] = (1.0 + local["XACT-NORDEN.ST"]) / (1.0 + fx_returns["EURSEK=X"]) - 1.0
+    rate = document["risk_free"]["monthly"]
+    rate.index = rate.index.to_timestamp(how="start")
+    expected = translated.sub(rate.reindex(local.index), axis=0)
+    expected.index = pd.PeriodIndex(expected.index, freq="M")
+    untranslated = local.sub(rate.reindex(local.index), axis=0)
+    untranslated.index = expected.index
+
+    assert list(excess.columns) == universe.TICKERS, "the sleeve map's order, which weights are indexed by"
+    assert not excess.isna().to_numpy().any()
+    assert str(excess.index[0]) == "2010-10", "the panel's first bar has no predecessor to divide by"
+    assert str(excess.index[-1]) == "2026-08"
+    pd.testing.assert_frame_equal(excess, expected[list(universe.TICKERS)])
+    assert not np.allclose(excess["XACT-NORDEN.ST"], untranslated["XACT-NORDEN.ST"], atol=1e-9)
