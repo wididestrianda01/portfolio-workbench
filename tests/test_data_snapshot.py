@@ -4,9 +4,9 @@ import json
 
 import pandas as pd
 import pytest
-from synthetic import build
+from synthetic import _french_zip, build
 
-from portfolio_workbench.data import loader, manifest, panel, quality
+from portfolio_workbench.data import loader, manifest, quality
 
 
 @pytest.fixture(scope="module")
@@ -33,12 +33,50 @@ def test_panel_shape_and_join(frozen):
     assert set(prices["currency"]) == {"EUR", "SEK"}
 
 
-def test_as_of_rule_hides_the_month_that_has_not_closed(frozen):
-    prices = loader.load_panel(frozen)["prices"]
-    seen = lambda when: set(pd.PeriodIndex(panel.as_of(prices, when)["period_month"], freq="M").astype(str))
+def test_the_load_path_hides_the_month_that_has_not_closed(frozen):
+    """`as_of` is a reader's moment and the loader is the only way in, so a bar that reader
+    could not have seen is absent from the frame rather than refused by a later filter."""
+    view = loader.load_panel(frozen, as_of="2026-08-31")
+    seen = set(view["prices"]["period_month"].dt.strftime("%Y-%m"))
+    assert "2026-08" not in seen, "August's bar is not available during August"
+    assert view["prices"]["available_from"].max() <= pd.Timestamp("2026-08-31")
+    assert str(view["months"].max()) == "2026-07"
+    assert str(view["as_of"]) == "2026-08-31"
 
-    assert "2026-08" not in seen("2026-08-31"), "August's bar is not available during August"
-    assert "2026-08" in seen("2026-09-01"), "it becomes available on the first day of September"
+    later = loader.load_panel(frozen, as_of="2026-09-01")
+    assert "2026-08" in set(later["prices"]["period_month"].dt.strftime("%Y-%m")), (
+        "it becomes available on the first day of September"
+    )
+
+
+def test_the_translated_factor_frame_is_not_the_quoted_one_scaled(frozen):
+    """The fixture holds the euro reference rate flat, so the translated block must equal
+    the quoted one exactly. A currency LEVEL reaching the translation instead scales every
+    quote by the rate itself, which reads as a factor frame of +100% months."""
+    factors = loader.load_panel(frozen)["factors"]
+    assert factors["fx_level"].nunique() == 1, "the fixture holds the reference rate flat"
+    assert len(factors["eur"]) > 100, "the fixture translates the whole panel"
+    pd.testing.assert_frame_equal(factors["eur"], factors["usd"].loc[factors["eur"].index])
+
+
+def test_the_fixture_reports_its_thin_lines(frozen):
+    """The floor is read from the issuer facts, and a line whose size the issuer does not
+    publish is reported as unscreened rather than passing a floor it was never measured
+    against."""
+    warnings = loader.load_panel(frozen)["warnings"]
+    assert any("thin liquidity" in line and "IBGL.AS" in line for line in warnings)
+    assert any("liquidity not screened" in line and "IMEU.AS" in line for line in warnings)
+
+
+def test_a_factor_archive_that_does_not_parse_is_a_manifest_fault(tmp_path):
+    """The parser's own fault type is translated by the manifest, so every way a snapshot
+    can be wrong is refused in one vocabulary."""
+    empty = pd.DataFrame(columns=["Mkt-RF"], index=pd.PeriodIndex([], freq="M"))
+    path = _french_zip(
+        tmp_path / "Developed_5_Factors.zip", "Developed_5_Factors.csv", ["Mkt-RF"], empty, "vintage"
+    )
+    with pytest.raises(manifest.ManifestError, match="no monthly rows"):
+        manifest.measure(path)
 
 
 def test_manifest_mismatch_is_refused(frozen, tmp_path):

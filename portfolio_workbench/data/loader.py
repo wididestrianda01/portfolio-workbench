@@ -16,7 +16,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import external, manifest, panel, quality
+from . import external, manifest, panel, quality, universe
+from .universe import WINDOW_END
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_ROOT = HERE.parent.parent / ".data" / "panel"
@@ -105,17 +106,22 @@ def load_factors(root):
     usd = developed.join(momentum, how="inner")
 
     eurusd_daily = external.read_ecb_csv(Path(root) / _role_path(document, "ecb_eurusd"))
-    fx_monthly = external.monthly_last(eurusd_daily)
-    # The euro reference rate begins in 1990-11, before which the factor library still
-    # publishes. Nothing in the panel reaches back that far, so the untranslatable months
-    # are dropped and reported rather than filled with an assumed rate.
-    covered = usd.index.intersection(fx_monthly.index)
+    fx_level = external.monthly_last(eurusd_daily)
+    # The translation takes the currency leg as a RETURN, never as the quoted rate:
+    # `monthly_last` returns the level a position is valued at, and a level reaching a
+    # multiplicative translation scales every quote by the rate itself.
+    fx_returns = external.monthly_returns(fx_level)
+    # The ECB's dollar reference rate begins in 1999-01 and a return needs the month before
+    # it, so the first euro month is untranslatable too; the factor library reaches back to
+    # 1990-11. Nothing in the panel goes back that far, so the untranslatable months are
+    # dropped and reported rather than filled with an assumed rate.
+    covered = usd.index.intersection(fx_returns.index)
     untranslated = usd.index.difference(covered)
     return {
         "usd": usd,
-        "eur": external.eur_translate(usd.loc[covered], fx_monthly),
+        "eur": external.eur_translate(usd.loc[covered], fx_returns),
         "europe_usd": europe,
-        "fx_level": fx_monthly,
+        "fx_level": fx_level,
         "untranslated": f"{untranslated.min()}..{untranslated.max()}" if len(untranslated) else None,
         "vintage": developed.attrs.get("vintage", "unknown"),
     }
@@ -132,19 +138,43 @@ def load_risk_free(root):
         "monthly": external.accrue_monthly(daily),
         "basis_bp": basis_bp,
         "overlap_days": overlap,
-        "naive_monthly": external.naive_monthly(daily),
     }
+
+
+def _rates(fx):
+    """EUR per unit of each currency the issuer facts are quoted in.
+
+    Fund sizes arrive in the fund's own denomination while the liquidity floor is a euro
+    figure, so they are converted at the snapshot's own newest month-end rate inside the
+    declared window rather than at a rate assumed today. A currency the FX leg does not
+    carry is absent from the table, and the line it belongs to is reported as unscreened.
+    """
+    if not len(fx):
+        return {}
+    month = fx.loc[fx["period_month"] <= pd.Period(WINDOW_END, freq="M").start_time, "period_month"].max()
+    rates = {}
+    for instrument, currency in universe.FX_QUOTES.items():
+        rows = fx[(fx["instrument"] == instrument) & (fx["period_month"] == month)]
+        if len(rows):
+            rates[currency] = 1.0 / float(rows["close"].iloc[0])
+    return rates
 
 
 def load_panel(root=None, as_of=None):
     """Every leg, verified and gated, ready for the analytics.
+
+    `as_of` is a reader's moment, and the legs come back as that reader could have seen
+    them: the availability rule is enforced by the loader rather than left to every caller
+    to re-apply, so there is no path into the package that skips it. The too-fresh stop is
+    a different test and runs against the snapshot's own stamp, because a bar from a month
+    that had not closed when the snapshot was taken is a fetch fault whoever is asking.
 
     Warnings travel with the panel rather than being printed here, so that whichever
     module reports a number prints the qualification beside that number.
     """
     root = snapshot_root(root)
     document = manifest.verify(root)
-    as_of = as_of or document["created"]
+    taken = document["created"]
 
     prices = _load_role(root, document, "price", REQUIRED_PRICE_COLUMNS, "price")
     fx = _load_role(root, document, "fx", REQUIRED_FX_COLUMNS, "fx")
@@ -155,10 +185,14 @@ def load_panel(root=None, as_of=None):
     # The gate runs on the panel as the snapshot holds it, before the declared window
     # trims anything: a bar that should never have been fetched is a fetch fault, and
     # trimming first would hide it behind the window.
-    warnings = quality.run(prices, facts, as_of, factor_months=factors["usd"].index)
-    warnings += quality.run(fx, {}, as_of)
+    warnings = quality.run(prices, facts, taken, factor_months=factors["usd"].index, rates=_rates(fx))
+    warnings += quality.run(fx, {}, taken)
     prices, dropped_prices = panel.window(prices)
     fx, dropped_fx = panel.window(fx)
+
+    if as_of is not None:
+        prices = panel.as_of(prices, as_of)
+        fx = panel.as_of(fx, as_of)
 
     months = panel.joined_months(
         prices["period_month"].drop_duplicates(),
@@ -176,5 +210,5 @@ def load_panel(root=None, as_of=None):
         "months": months,
         "warnings": warnings,
         "dropped": {"prices": dropped_prices, "fx": dropped_fx},
-        "as_of": as_of,
+        "as_of": as_of if as_of is not None else taken,
     }

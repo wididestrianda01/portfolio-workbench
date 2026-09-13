@@ -25,15 +25,21 @@ def add_availability(frame, date_col="date"):
     return out
 
 
+def cutoff(when):
+    """The moment a reader stands at, on the calendar rather than in UTC.
+
+    Bar labels are naive month starts while a snapshot's creation stamp carries a UTC
+    offset, so the comparison is made on the calendar date. One definition, because the
+    as-of filter and the too-fresh stop must agree on which bars a given moment exposes.
+    """
+    moment = pd.Timestamp(when)
+    return moment.tz_localize(None) if moment.tzinfo is not None else moment
+
+
 def as_of(frame, when, column="available_from"):
     """Rows a reader standing at `when` could have seen. Rows are never dropped here
     for being unended - that is the quality gate's business; this is only the filter."""
-    return frame[frame[column] <= pd.Timestamp(when)]
-
-
-def drop_unended(frame, when, column="available_from"):
-    """Remove bars whose month had not ended at `when`. The rule, not a check."""
-    return as_of(frame, when, column)
+    return frame[frame[column] <= cutoff(when)]
 
 
 def wide(frame, value="adj_close"):
@@ -75,17 +81,28 @@ def joined_months(price_months, factor_months, risk_free_months):
     return index.sort_values()
 
 
+def month_span(months):
+    """One series' own coverage: first month, last month, month count, months missing.
+
+    Computed in one place because the coverage report and the missing-bar stop would
+    otherwise each decide for themselves what a missing month is, and the two reports
+    would then disagree about the same panel.
+    """
+    unique = pd.PeriodIndex(months, freq="M").drop_duplicates().sort_values()
+    full = pd.period_range(unique[0], unique[-1], freq="M")
+    return unique[0], unique[-1], len(unique), full.difference(unique)
+
+
 def coverage_months(frame):
     """First and last month present per instrument, and the months missing between them."""
     report = {}
     for instrument, block in frame.groupby("instrument"):
-        months = pd.PeriodIndex(block["period_month"].drop_duplicates(), freq="M").sort_values()
-        full = pd.period_range(months[0], months[-1], freq="M")
+        first, last, count, missing = month_span(block["period_month"])
         report[instrument] = {
-            "first": str(months[0]),
-            "last": str(months[-1]),
-            "months": len(months),
-            "missing": [str(m) for m in full.difference(months)],
+            "first": str(first),
+            "last": str(last),
+            "months": count,
+            "missing": [str(m) for m in missing],
         }
     return report
 

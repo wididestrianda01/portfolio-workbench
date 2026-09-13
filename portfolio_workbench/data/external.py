@@ -10,21 +10,31 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-# The overnight benchmark migrated: EONIA is published up to the transition and the
-# euro short-term rate takes over from that day. Splicing anywhere else mixes two
-# rates with a structural spread between them.
+# The overnight benchmark migrated: EONIA is published up to the transition and the euro
+# short-term rate takes over from that day. Splicing anywhere else mixes two rates with a
+# structural spread between them; that spread is a published 8.5 bp, and `splice_risk_free`
+# measures it over the overlap rather than trusting it.
 RF_TRANSITION = "2019-10-01"
-RF_SPREAD_BP = 8.5     # EONIA over the euro short-term rate, the published spread
 ACCRUAL_DAYS = 360.0
 
 FRENCH_QUOTE_CHARS = "latin-1"
+
+
+class SourceFormatError(Exception):
+    """A snapshot file is not the shape its parser expects.
+
+    Raised by the parsers below and translated into a manifest fault by
+    `manifest.measure`, so that a snapshot which no longer parses is refused by the same
+    vocabulary as a snapshot whose checksum has moved, rather than escaping as a bare
+    parse error no caller can name.
+    """
 
 
 def read_ecb_csv(path, column="OBS_VALUE"):
     """ECB Data Portal `csvdata`: one observation per date, no resampling."""
     frame = pd.read_csv(Path(path))
     if "TIME_PERIOD" not in frame.columns:
-        raise ValueError(f"{Path(path).name}: no TIME_PERIOD column in the ECB export")
+        raise SourceFormatError(f"{Path(path).name}: no TIME_PERIOD column in the ECB export")
     frame["date"] = pd.to_datetime(frame["TIME_PERIOD"])
     series = frame.set_index("date")[column].astype(float).sort_index()
     return series[~series.index.duplicated(keep="first")]
@@ -54,9 +64,9 @@ def accrue_monthly(daily_percent):
 
     The published figure is an ANNUALISED percentage. It is accrued over calendar days
     at /360 and compounded within the month, which is the only reading that matches the
-    unit the publisher states. Compounding it as if it were a per-period rate produces a
-    monthly risk-free return above 90% - the error class `naive_monthly` below exists to
-    keep visible.
+    unit the publisher states. Treating the same number as a per-period rate instead
+    produces a monthly risk-free return above 90%, which is far above anything the
+    plausibility stop on a price line would tolerate.
     """
     daily = daily_percent / 100.0
     monthly = (1.0 + daily / ACCRUAL_DAYS).resample("ME").prod() - 1.0
@@ -64,20 +74,23 @@ def accrue_monthly(daily_percent):
     return monthly
 
 
-def naive_monthly(daily_percent, periods=21):
-    """The counterfactual: the annualised rate treated as a daily rate.
-
-    Kept as code so the report can print both numbers side by side; a reader who sees
-    only the correct path has no way to tell a units error from a quiet market.
-    """
-    return float(np.prod(1.0 + daily_percent.to_numpy()[:periods] / 100.0) - 1.0)
-
-
 def monthly_last(daily):
     """A daily level series reduced to month-end levels."""
     monthly = daily.resample("ME").last()
     monthly.index = monthly.index.to_period("M")
     return monthly.dropna()
+
+
+def monthly_returns(levels):
+    """The month-on-month change of a monthly level series.
+
+    A level is not a return, and the two are indistinguishable in shape: EURUSD quoted at
+    1.16 travels down a column exactly as happily as a 1.6% change does. Every function
+    that wants a percentage change takes the output of this one, so a quoted rate cannot
+    reach it. The first month has no predecessor to divide by and is dropped rather than
+    filled, because a filled zero is a fabricated observation.
+    """
+    return (levels / levels.shift(1) - 1.0).dropna()
 
 
 def parse_french_zip(path):
@@ -93,12 +106,12 @@ def parse_french_zip(path):
         raw = archive.read(archive.namelist()[0]).decode(FRENCH_QUOTE_CHARS)
     lines = raw.splitlines()
     if not lines:
-        raise ValueError(f"{path.name}: empty archive member")
+        raise SourceFormatError(f"{path.name}: empty archive member")
     vintage = lines[0].strip() if "created using" in lines[0] else "unknown"
 
     header_index = next((i for i, line in enumerate(lines) if line.strip().startswith(",")), None)
     if header_index is None:
-        raise ValueError(f"{path.name}: no header line; the file shape has changed")
+        raise SourceFormatError(f"{path.name}: no header line; the file shape has changed")
     header = ["date"] + [field.strip() for field in lines[header_index].split(",")[1:]]
 
     rows = []
@@ -108,7 +121,7 @@ def parse_french_zip(path):
             break
         rows.append([field.strip() for field in line.split(",")][: len(header)])
     if not rows:
-        raise ValueError(f"{path.name}: no monthly rows before the annual block")
+        raise SourceFormatError(f"{path.name}: no monthly rows before the annual block")
 
     frame = pd.DataFrame(rows, columns=header)
     frame["date"] = pd.to_datetime(frame["date"], format="%Y%m")
@@ -122,16 +135,21 @@ def parse_french_zip(path):
     return frame
 
 
-def eur_translate(factors, fx_monthly):
+def eur_translate(factors, fx_returns):
     """Translate factor returns quoted in a foreign currency into euro.
 
-    The library's factor returns are USD. For a euro investor the translation is
-    multiplicative: holding the foreign asset and the currency exposure compounds,
-    it does not add. The translated block is kept as a separate, labelled frame so
-    that a result cannot cite one and claim the other.
+    Two things this gets wrong if taken casually. The legs COMPOUND, so the translation is
+    (1 + r) / (1 + fx) - 1 rather than a sum. And it DIVIDES: the rate is quoted as dollars
+    per euro, so a euro that buys more dollars lowers the euro value of a dollar return -
+    multiplying would add return on euro appreciation, which is the currency basis with
+    its sign inverted. `fx_returns` is a return series, the output of `monthly_returns`,
+    never a level: a level passed here would scale every quote by the rate itself.
+
+    The translated block is kept as a separate, labelled frame so that a result cannot
+    cite one and claim the other.
     """
-    fx = fx_monthly.reindex(factors.index)
+    fx = fx_returns.reindex(factors.index)
     if fx.isna().any():
         missing = factors.index[fx.isna()][:3].tolist()
         raise ValueError(f"the FX series does not cover the factor months; first gaps {missing}")
-    return (1.0 + factors).mul(1.0 + fx, axis=0) - 1.0
+    return (1.0 + factors).div(1.0 + fx, axis=0) - 1.0

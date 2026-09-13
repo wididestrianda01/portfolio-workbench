@@ -30,19 +30,26 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def shape(path):
+def measure(path):
     """Row count and date range of one artifact, read from the artifact itself.
 
     Both the central-bank CSVs and the price files carry one ISO date per row, so the
     range is a string comparison and no date library is needed to verify a file.
     The factor archives are counted on their monthly rows, which is the count the
     analytics consume.
+
+    A file that does not parse is refused here rather than left to raise: the parser's
+    own fault type is translated into this module's, so every way a snapshot can be wrong
+    arrives at the caller as one vocabulary.
     """
     path = Path(path)
     if path.suffix == ".zip":
-        from .external import parse_french_zip
+        from .external import SourceFormatError, parse_french_zip
 
-        frame = parse_french_zip(path)
+        try:
+            frame = parse_french_zip(path)
+        except SourceFormatError as fault:
+            raise ManifestError(f"{path.name}: {fault}") from fault
         if frame.empty:
             raise ManifestError(f"{path.name}: the factor archive holds no monthly rows")
         return len(frame), str(frame.index[0]), str(frame.index[-1])
@@ -67,7 +74,7 @@ def describe(root, relative, role, source, url, retrieved, **extra):
     path = Path(root) / relative
     if not path.exists():
         raise ManifestError(f"{relative}: listed for the snapshot but not present")
-    rows, first, last = shape(path)
+    rows, first, last = measure(path)
     entry = {
         "path": relative,
         "role": role,
@@ -126,7 +133,7 @@ def verify(root):
                 f"{entry['path']}: sha256 {actual[:12]} does not match the manifest "
                 f"{entry['sha256'][:12]}; the snapshot is not the one the results were keyed to"
             )
-        rows, first, last = shape(path)
+        rows, first, last = measure(path)
         if (rows, first, last) != (entry["rows"], entry["first"], entry["last"]):
             raise ManifestError(
                 f"{entry['path']}: manifest says {entry['rows']} rows {entry['first']}..{entry['last']}, "

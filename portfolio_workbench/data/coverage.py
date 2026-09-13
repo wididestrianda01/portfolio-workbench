@@ -23,8 +23,8 @@ def main(root=None):
     print(f"[data] snapshot {document['snapshot_id']}, taken {document['as_of']}")
     print(f"[data] {len(prices)} rows over {len(coverage)} instruments, "
           f"{prices['period_month'].nunique()} months of history")
-    print(f"[data] joined panel {months.min()} -> {months.max()} = {len(months)} months "
-          f"x {prices['instrument'].nunique()} sleeves")
+    print(f"[data] joined panel {months.min()} → {months.max()} = {len(months)} months "
+          f"× {prices['instrument'].nunique()} sleeves")
     if document["dropped"]["prices"]:
         print(f"[data] {document['dropped']['prices']} rows fell outside the declared window")
 
@@ -32,17 +32,22 @@ def main(root=None):
     for instrument, cover in coverage.items():
         events = int((prices.loc[prices["instrument"] == instrument, "dividend"].fillna(0.0) > 0).sum())
         gap = f", {len(cover['missing'])} missing" if cover["missing"] else ""
-        print(f"    {instrument:<16s} {cover['first']} -> {cover['last']}  {cover['months']:>3d} months"
+        print(f"    {instrument:<16s} {cover['first']} → {cover['last']}  {cover['months']:>3d} months"
               f"{gap}  distributions {events}")
 
     print(f"[data] FX series: {sorted(fx['instrument'].unique())}")
     factors = document["factors"]
-    print(f"[data] factor spine {factors['usd'].index.min()} -> {factors['usd'].index.max()} "
-          f"({len(factors['usd'])} months, cols {list(factors['usd'].columns)}), quoted in USD, "
-          f"translated to EUR as a separate frame")
+    usd, eur = factors["usd"], factors["eur"]
+    print(f"[data] factor spine {usd.index.min()} → {usd.index.max()} "
+          f"({len(usd)} months, cols {list(usd.columns)}), quoted in USD, translated to EUR "
+          f"as a separate frame")
+    newest = eur.index.max()
+    print(f"[data] the translated frame is not the quoted one: Mkt-RF {usd.loc[newest, 'Mkt-RF']:+.2%} "
+          f"quoted against {eur.loc[newest, 'Mkt-RF']:+.2%} in EUR at a dollar rate of "
+          f"{factors['fx_level'].loc[newest]:.4f}")
     print(f"[data] factor vintage: {factors['vintage']!r}")
     if factors["untranslated"]:
-        print(f"[data] factor months before the euro reference rate begins are not translated: "
+        print(f"[data] factor months with no euro leg are not translated: "
               f"{factors['untranslated']} (outside the panel, so no return is affected)")
     risk_free = document["risk_free"]
     rf = risk_free["monthly"].reindex(months)
@@ -50,8 +55,6 @@ def main(root=None):
           f"{risk_free['overlap_days']} days at {risk_free['basis_bp']:+.1f} bp")
     print(f"[data] risk-free accrued daily at /360: mean {rf.mean():.4%}/month over the panel, "
           f"min {rf.min():.4%}, max {rf.max():.4%}")
-    print(f"[data] the trap: compounding the annualised rate as a per-period rate gives "
-          f"{risk_free['naive_monthly']:.0%} per month")
     for line in document["warnings"]:
         print(f"[data] {line}")
     return document

@@ -4,15 +4,14 @@ Each test names the rule it plants and asserts the rule fires. A frame is built 
 rather than loaded from a snapshot so that the plant is the only thing wrong with it.
 """
 
-import numpy as np
 import pandas as pd
 import pytest
 
 from portfolio_workbench.data import quality
 
 FACTS = {
-    "AAA": {"income_policy": "distributing (quarterly)"},
-    "BBB": {"income_policy": "accumulating"},
+    "AAA": {"income_policy": "distributing (quarterly)", "fund_size": "EUR 0.80bn"},
+    "BBB": {"income_policy": "accumulating", "fund_size": "EUR 4.00bn"},
 }
 MONTHS = pd.period_range("2020-01", "2020-06", freq="M")
 
@@ -69,6 +68,21 @@ def test_each_stop_fires_on_its_plant(plant, rule):
     assert stop.value.rule == rule
 
 
+def test_the_plausibility_bound_follows_the_sleeve():
+    """A 10% month is an ordinary month in real estate and a fault in cash, so the bound is
+    read from the sleeve map instead of applied to every line alike."""
+    frame = planted_frame()
+    jumped = frame["adj_close"].to_numpy()
+    jumped[3] = jumped[2] * 1.10
+
+    with pytest.raises(quality.DataStop) as stop:
+        quality.stop_implausible_prices(frame.assign(instrument="XEON.DE", adj_close=jumped))
+    assert stop.value.rule == "implausible move"
+    assert "cash sleeve" in stop.value.detail
+
+    quality.stop_implausible_prices(frame.assign(adj_close=jumped))   # unnamed line: the fallback bound
+
+
 def test_too_fresh_bar_needs_a_snapshot_time():
     frame = planted_frame()
     quality.stop_too_fresh(frame, as_of="2026-09-13")          # all bars long closed
@@ -81,10 +95,18 @@ def test_too_fresh_bar_needs_a_snapshot_time():
 def test_each_warning_fires_on_its_plant():
     frame = planted_frame()
 
-    stale = frame.copy()
-    dead = stale["instrument"] == "BBB"
-    stale.loc[dead, "adj_close"] = np.where(stale.loc[dead].index >= 6, 50.0, 50.0)
-    assert any("thin liquidity" in line for line in quality.warn_stale_line(stale))
+    # AAA reports EUR 0.80bn against the floor, BBB reports EUR 4.00bn; the screen reads
+    # the issuer's reported size rather than the price series, so neither line can pass
+    # or fail it by accident.
+    thin = quality.warn_thin_liquidity(frame, FACTS, {})
+    assert any("thin liquidity" in line and "AAA" in line for line in thin)
+    assert not any("BBB" in line for line in thin)
+
+    # A size the parser cannot read, and a size in a currency the snapshot carries no rate
+    # for, are both reported as unscreened rather than passing the floor unmeasured.
+    assert quality.fund_size_eur("SEK 17,092m", {"SEK": 1 / 11.5}) == pytest.approx(1.486e9, rel=1e-3)
+    assert quality.fund_size_eur("n/a", {}) is None
+    assert quality.fund_size_eur("USD 2bn", {}) is None
 
     extra = frame.copy()
     events = (extra["instrument"] == "AAA") & (extra["period_month"].dt.month <= 5)

@@ -41,7 +41,11 @@ GROUP = {
     "cash": "real_and_cash",
 }
 
-FX_TICKERS = ("EURUSD=X", "EURSEK=X")
+# The two FX series the panel records, each with the currency it prices against the euro.
+# They exist to measure and translate currency rather than to trade it, and the issuer
+# facts are quoted in each fund's own denomination, so the rate table that applies the
+# liquidity floor is built from this map.
+FX_QUOTES = {"EURUSD=X": "USD", "EURSEK=X": "SEK"}
 
 TICKERS = list(SLEEVES)
 GROUPS = [GROUP[SLEEVES[t][0]] for t in TICKERS]
@@ -73,13 +77,6 @@ RISK_BUDGET = {"equity": 0.55, "government": 0.20, "credit": 0.15, "real_and_cas
 WINDOW_START, WINDOW_END = "2010-09", "2026-08"
 PANEL_START, PANEL_END = "2010-09", "2026-07"
 
-# The fixed constraint set, identical in every cell so that a difference is
-# attributable to the method rather than to a constraint.
-CAP = 0.35             # per-sleeve cap
-BAND = 0.01            # no-trade band, absolute weight move, per sleeve
-TURNOVER_CAP = 0.05    # one-way turnover per measured rebalance
-COST_BP = 10.0         # per side, charged on traded notional
-EST_MONTHS = 60        # rolling estimation window
-COST_SENSITIVITY_BP = (5.0, 20.0, 40.0)
-
-SEED = 20260912
+# The constraint set, the cost rate and the estimation window are declared with the
+# modules that apply them: they parameterise a construction and an evaluation, not this
+# universe, and no data-layer rule reads them.
