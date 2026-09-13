@@ -1,5 +1,13 @@
 # Repository boundary: the repository carries the build.
+# Local working notes stay out of the index.
+
+# The frozen market-data snapshot: retrieved once, local, never redistributed.
+.data/
 
 # Credentials and local overrides.
 .env
 .env.*
+
+# Python bytecode caches.
+__pycache__/
+*.pyc
