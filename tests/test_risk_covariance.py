@@ -24,9 +24,11 @@ def test_the_sample_estimator_is_the_sample_covariance():
     assert np.allclose(covariance.sample(frame).to_numpy(), np.cov(frame.to_numpy(), rowvar=False, ddof=1))
 
 
-def test_every_estimator_carries_the_labels_it_was_given():
+def test_every_estimator_carries_the_labels_it_was_given_and_refuses_a_repeat():
     """A covariance without its labels is a covariance that can align against the wrong weights, so
-    each one takes the frame's order out with it - including when that order is unusual."""
+    each one takes the frame's order out with it - including when that order is unusual. A repeated
+    instrument is refused rather than labelled, since two columns under one name cannot be ordered.
+    """
     frame = returns(columns=["b", "a", "c"])
     shrunk, _ = covariance.shrinkage(frame)
     factored, _ = covariance.factor_model(frame, count=2)
@@ -35,11 +37,8 @@ def test_every_estimator_carries_the_labels_it_was_given():
         assert list(matrix.columns) == ["b", "a", "c"]
         assert np.allclose(matrix.to_numpy(), matrix.to_numpy().T)
 
-
-def test_a_repeated_instrument_is_refused_rather_than_labelled():
-    frame = returns(columns=["a", "a", "b"])
     with pytest.raises(ValueError, match="repeated instrument"):
-        covariance.sample(frame)
+        covariance.sample(returns(columns=["a", "a", "b"]))
 
 
 def test_shrinkage_conditions_what_the_sample_cannot_invert():
@@ -67,11 +66,18 @@ def test_the_factor_covariance_reconstructs_the_discarded_eigenvalues():
 
 
 def test_the_conditioning_report_describes_all_three_on_one_window():
-    frame = returns()
+    """The axis is the conditioning the optimiser feels, so the three numbers have to come from one
+    window and one convention, and the number printed has to be the matrix returned. Shrinkage
+    conditioning better than the sample is the property the estimator exists for; the number the
+    sample reports here is the problem it answers."""
+    frame = returns(periods=20, collinear=True)
     report = covariance.conditioning(frame, count=2)
     assert report["components"] == 2
-    assert report["sample_condition"] > report["shrinkage_condition"]
-    assert set(report["covariances"]) == {"sample", "shrinkage", "factor"}
+    conditions = {name: float(np.linalg.cond(matrix)) for name, matrix in report["covariances"].items()}
+    assert report["sample_condition"] == pytest.approx(conditions["sample"])
+    assert report["sample_condition"] > report["shrinkage_condition"] * 10
+    assert conditions["shrinkage"] < conditions["sample"] and conditions["shrinkage"] < conditions["factor"]
+    assert 0.0 < report["intensity"] < 1.0
     for name, matrix in report["covariances"].items():
         assert list(matrix.index) == COLUMNS, f"{name} lost the order"
         assert np.all(np.linalg.eigvalsh(matrix.to_numpy()) > -1e-18), f"{name} is not positive semi-definite"

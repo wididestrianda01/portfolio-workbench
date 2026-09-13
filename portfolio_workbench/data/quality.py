@@ -77,8 +77,8 @@ def _months(frame):
     return pd.PeriodIndex(frame["period_month"], freq="M")
 
 
-def _pays_out(facts, instrument):
-    """Whether the issuer says the line distributes.
+def income_policy(facts, instrument):
+    """The issuer's declared income policy, and whether it means the line pays out.
 
     The field is free text in the manifest - "distributing (semi-annual)", "accumulating",
     "no income" - so which lines pay out is decided here, once, and both dividend rules
@@ -184,7 +184,7 @@ def stop_dividend_blind(frame, facts):
     total-return label. Nothing downstream can repair that, and the failure is silent.
     """
     for instrument, block in frame.groupby("instrument"):
-        policy, pays_out = _pays_out(facts, instrument)
+        policy, pays_out = income_policy(facts, instrument)
         if pays_out and float(block["dividend"].fillna(0.0).sum()) == 0.0:
             raise DataStop(
                 "distributing line with no distribution",
@@ -289,7 +289,7 @@ def warn_extra_distributions(frame, facts):
         events = block[block["dividend"].fillna(0.0) > 0]
         if not len(events):
             continue
-        policy, pays_out = _pays_out(facts, instrument)
+        policy, pays_out = income_policy(facts, instrument)
         if not pays_out:
             out.append(
                 f"WARNING unexpected distribution: {instrument} is declared '{policy}' yet carries "

@@ -14,9 +14,9 @@ direction for a rule that decides how many factors to trust.
 Two reference points are printed beside the mechanical count. The **Marchenko-Pastur edge**
 `(1 + sqrt(N/T))^2` is the analytic bulk edge for an uncorrelated panel and is a cross-check on
 the simulation rather than the threshold, because monthly returns are not normal and the edge
-assumes they are. A **pre-registered fixed count** of three is reported as well: the decision
-fixed it before the rule was applied, so a mechanical count that disagrees with it is a result
-to report, not a number to overwrite.
+assumes they are. A **pre-registered fixed count** of three is reported as well: it was fixed before the rule was
+applied, so a mechanical count that disagrees with it is a result to report rather than a number
+to overwrite.
 
 Both of these are counts on a correlation matrix, so every share of variance prints beside the
 **pure-noise share** for the same panel: at eleven series and this many observations the first
@@ -27,6 +27,11 @@ Extraction is extraction. The components are directions of common variation in t
 covariance. They are not selected factors, they are not identified as priced, and their labels
 are descriptive: nothing here says a component *is* a term-structure factor or a market factor.
 Selection required the criterion above, and the criterion is about variance, not about premia.
+
+**A panel this small undercounts.** Eigenvalue-based rules on a few dozen observations understate
+the number of directions a longer sample would support, so the count here is a decision about this
+panel's usable dimension and never a count of the factors in the market: the number is reported
+with the panel it was computed on, and no result may describe it as "the number of factors".
 """
 
 import numpy as np
@@ -34,7 +39,7 @@ import pandas as pd
 
 from ..data import loader, panel
 from . import spine as spine_module
-from .exposures import WINDOW, windows
+from .exposures import WINDOW, window_block, windows
 
 # The documented seed. Every permutation draw in the package comes from it, so a rerun of a
 # reported count reproduces the count rather than a nearby one.
@@ -43,9 +48,9 @@ DRAWS = 200
 PERCENTILE = 95
 # Fixed before the rule was applied, and reported beside the mechanical count whatever it says.
 PREREGISTERED_K = 3
-# The falsification the decision pre-specified: a count that jumps by more than one component
-# between adjacent steps, in more than this share of steps, is a rule too unstable to use, and
-# the fixed count takes over with both reported.
+# The falsification fixed before the rule was run: a count that jumps by more than one component
+# between adjacent steps, in more than this share of steps, is a rule too unstable to use, and the
+# fixed count takes over with both reported.
 MOVE_SHARE = 0.25
 STABILITY_SEEDS = 5
 
@@ -59,6 +64,10 @@ def _correlation(window):
     x = np.asarray(window, dtype=float)
     if x.shape[1] < 2:
         raise ValueError("a correlation matrix needs at least two series")
+    if np.isnan(x).any():
+        # A NaN reaching the decomposition raises from inside numpy with nothing named; refused
+        # here in this package's vocabulary instead.
+        raise ValueError("the window carries a missing value; a filled one would enter every component built on it")
     spread = x.std(axis=0, ddof=1)
     if (spread == 0).any():
         raise ValueError("a series in the window has no variance; its correlation is undefined")
@@ -115,6 +124,17 @@ def orient(loadings):
     return loadings
 
 
+def component_loadings(eigenvalues, vectors, count):
+    """The first `count` components as loadings on the correlation scale, signed.
+
+    One place, because a loading is only ever the oriented eigenvector scaled by the square root
+    of its eigenvalue, and a second copy of that is a second place for the sign convention to be
+    forgotten. The factor covariance and the decomposition both read the components through here,
+    so they cannot disagree about what a component is.
+    """
+    return orient(vectors[:, :count]) * np.sqrt(eigenvalues[:count])
+
+
 def eigen_structure(window):
     """The window's correlation matrix decomposed, eigenvalues descending.
 
@@ -141,7 +161,7 @@ def decompose(window, components=None, draws=DRAWS, seed=SEED):
     count = retained(eigenvalues, null) if components is None else int(components)
     count = max(count, 0)
     vectors = orient(vectors[:, :count])
-    loadings = vectors * np.sqrt(eigenvalues[:count])
+    loadings = component_loadings(eigenvalues, vectors, count)
     return {
         "eigenvalues": eigenvalues,
         "loadings": loadings,
@@ -213,19 +233,39 @@ def varimax(loadings, iterations=100, tolerance=1e-9):
     return (normalised @ rotation) * scale
 
 
-def count_series(returns, months, window=WINDOW, draws=DRAWS, seed=SEED):
-    """The rule applied in every window, and the falsification the decision pre-specified.
+def decide(counts):
+    """The counts, the falsification rule applied, and what the rule decided.
 
-    The count is decided inside each window from that window's own permutation null. If it moves
-    by more than one component between adjacent steps in more than a quarter of steps, the fixed
-    count takes over and both are reported: a rule that unstable would be choosing the answer as
-    much as measuring it.
+    Split out because the rule is arithmetic on a series of counts. Tested only through a full
+    walk-forward it would be a rule whose boundary nobody can exercise, and the boundary is exactly
+    what the falsification turns on: a move of more than one component, in more than a quarter of
+    the steps. A move of exactly one is not a move.
+    """
+    counts = np.asarray(counts)
+    moves = np.abs(np.diff(counts)) > 1
+    share = float(moves.mean()) if len(moves) else 0.0
+    falsified = share > MOVE_SHARE
+    return {
+        "mechanical": counts,
+        "counts": np.full_like(counts, PREREGISTERED_K) if falsified else counts,
+        "falsified": falsified,
+        "move_share": share,
+    }
+
+
+def count_series(returns, months, window=WINDOW, draws=DRAWS, seed=SEED):
+    """The rule applied in every window, and the falsification fixed before the counts were seen.
+
+    The count is decided inside each window from that window's own permutation null. If it moves by
+    more than one component between adjacent steps in more than a quarter of steps, the fixed count
+    takes over and both are reported: a rule that unstable would be choosing the answer as much as
+    measuring it.
     """
     months = pd.PeriodIndex(months, freq="M").sort_values()
     counts, edges, limits, tops, traded, correlations = [], [], [], [], [], []
     for traded_month, window_months in windows(months, window):
-        block = returns.reindex(window_months).dropna(how="all")
-        if not len(block) >= block.shape[1] + 1:
+        block = window_block(returns, window_months)
+        if len(block) < block.shape[1] + 1:
             raise ValueError(f"the window ending {window_months[-1]} holds {len(block)} returns for its series")
         correlation = _correlation(block)
         eigenvalues = np.sort(np.linalg.eigvalsh(correlation))[::-1]
@@ -238,15 +278,9 @@ def count_series(returns, months, window=WINDOW, draws=DRAWS, seed=SEED):
         traded.append(traded_month)
 
     counts = np.asarray(counts)
-    moves = np.abs(np.diff(counts)) > 1
-    share = float(moves.mean()) if len(moves) else 0.0
-    falsified = share > MOVE_SHARE
     return {
         "traded": pd.PeriodIndex(traded, freq="M"),
-        "mechanical": counts,
-        "counts": np.full_like(counts, PREREGISTERED_K) if falsified else counts,
-        "falsified": falsified,
-        "move_share": share,
+        **decide(counts),
         "mp_edge": np.asarray(edges),
         "null_top": np.asarray(limits),
         "observed_top": np.asarray(tops),
@@ -254,14 +288,14 @@ def count_series(returns, months, window=WINDOW, draws=DRAWS, seed=SEED):
     }
 
 
-def stability(returns, factors, months, window=WINDOW, draws=DRAWS):
+def stability(returns, months, window=WINDOW, draws=DRAWS):
     """The count from repeated permutation draws on the last window, and whether they agree.
 
     A count that flips with the seed is not a count. The tolerance is stated rather than assumed:
     every seed must return the same count, and a disagreement is reported rather than averaged.
     """
     traded_month, window_months = list(windows(pd.PeriodIndex(months, freq="M").sort_values(), window))[-1]
-    block = returns.reindex(window_months).dropna(how="all")
+    block = window_block(returns, window_months)
     eigenvalues = np.sort(np.linalg.eigvalsh(_correlation(block)))[::-1]
     counts = [
         retained(eigenvalues, permutation_null(block, draws=draws, seed=SEED + offset))
@@ -319,7 +353,7 @@ def main(root=None):
           f"{series['null_top'].max():.2f}, observed top eigenvalue {series['observed_top'].min():.2f}.."
           f"{series['observed_top'].max():.2f}, mean |off-diagonal correlation| "
           f"{series['mean_abs_correlation'].min():.2f}..{series['mean_abs_correlation'].max():.2f}")
-    stable = stability(returns, named, months)
+    stable = stability(returns, months)
     print(f"[factor] count stability on the last window ({stable['month']}) across {STABILITY_SEEDS} permutation "
           f"seeds: {stable['counts']} - {'all agree' if stable['agrees'] else 'the count moves with the seed'}")
 
@@ -330,6 +364,8 @@ def main(root=None):
     print("[factor] these are directions of common variation in this panel's covariance: extraction, not "
           "selection, and no component is claimed to be priced. Selection needed the criterion stated above, "
           "which is about variance.")
+    print(f"[factor] a panel this short undercounts the directions a longer sample would support, so {count} is "
+          f"this panel's usable dimension over {returns.shape[0]} months, never the number of factors in the market")
     for line in document["warnings"]:
         print(f"[factor] {line}")
     return {"full": full, "series": series, "stability": stable, "returns": returns, "named": named}

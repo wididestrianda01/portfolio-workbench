@@ -7,7 +7,8 @@ headline, because it asks whether the published and constructed factors describe
 and the reverse direction prints beside it rather than being dropped, because a one-directional
 answer to a two-directional question is a selection of the result.
 
-The test form is Huberman and Kandel (1987), as the decision carried it: regress each test asset
+The test form is Huberman and Kandel (1987) in the spanning reading of their 1987 result: regress
+each test asset
 on the benchmark set, and the benchmark spans the test assets when, jointly, **all intercepts
 are zero** and **the rows of the loadings sum to one**. Gibbons, Ross and Shanken (1989)
 supplies the finite-sample F test for the joint-intercepts half. Both halves are reported.
@@ -28,7 +29,6 @@ a statement about these eleven sleeves over this window.
 
 import numpy as np
 from scipy.stats import f as f_distribution
-from scipy.stats import norm
 
 from ..data import loader, panel
 from . import components as component_module
@@ -147,7 +147,7 @@ def fama_macbeth(returns, factors):
     residual degrees of freedom are zero, and the premia are an algebraic readout of the sample
     rather than estimates of anything. The identification is computed and returned, so the label
     rests on a number. The t-statistics use Fama-MacBeth standard errors and are read as an
-    illustration, which is what the decision said this procedure would be on a panel this size.
+    illustration, which is all this procedure can be on a panel this size.
     """
     common = returns.index.intersection(factors.index)
     y = np.asarray(returns.loc[common], dtype=float)
@@ -198,10 +198,12 @@ def main(root=None):
         print(f"    rows-sum-to-one half, reverse direction: {reverse_rows.min():+.2f}..{reverse_rows.max():+.2f}, "
               f"reported as computed - the test assets there are the named factors themselves, and the "
               f"zero-cost spread series among them are not the fully invested case the condition is stated for")
-    bar = float(norm.ppf(1.0 - 0.05 / 2))
-    print(f"[factor] the family is {rule['components']} test assets in one direction and {len(named.columns)} in "
-          f"the other: two joint tests, so Bonferroni at 5% needs p < {0.05 / 2:.4f} (|z| = {bar:.2f}) and a "
-          f"single p-value near 0.05 is not a finding")
+    verdicts = 2
+    sensitivity = 2 * verdicts
+    print(f"[factor] the verdict family is {verdicts} joint tests - {rule['components']} test assets in one "
+          f"direction and {len(named.columns)} in the other - so Bonferroni at 5% needs p < {0.05 / verdicts:.4f}. "
+          f"Repeating both at the pre-registered count is a sensitivity run, and the four together need "
+          f"p < {0.05 / sensitivity:.4f}")
 
     premium = premiums(named)
     clearing = [name for name, stats in premium.items() if abs(stats["t"]) >= PREMIUM_BARS["time_series"]]

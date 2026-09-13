@@ -21,9 +21,12 @@ excess return.
 
 import pandas as pd
 
-from ..data import loader, panel, universe
+from ..data import external, loader, panel, universe
 
 LEVEL_SLEEVES = ("IBGL.AS", "IEGE.AS")
+# Every sleeve the block reads, in one place: the guard and the arithmetic below have to agree
+# about which instruments the block is built from, so adding a leg edits one tuple.
+BLOCK_SLEEVES = ("IBGL.AS", "IEGE.AS", "IEAC.AS", "IHYG.L")
 CONSTRUCTED = ("government_level", "term_slope", "credit", "high_yield_excess")
 
 # The published file carries the risk-free rate it was built against as a column. The panel's
@@ -52,7 +55,7 @@ def constructed_block(returns):
     is what high yield pays over investment grade: each names the two sleeves it reads, so
     a reader can check the construction against the universe rather than trusting a label.
     """
-    _need(returns, LEVEL_SLEEVES + ("IEAC.AS", "IHYG.L"))
+    _need(returns, BLOCK_SLEEVES)
     return pd.DataFrame(
         {
             "government_level": 0.5 * (returns["IBGL.AS"] + returns["IEGE.AS"]),
@@ -77,14 +80,20 @@ def named_set(spine, block):
 
 
 def cross_check(document):
-    """The Europe set, as the same five factors plus momentum, in its own quoted currency.
+    """The Europe cut of the same model, five factors and no momentum, translated into euro.
 
-    It is the same library's regional cut of the same model, so a result that leans on the
-    Developed set can be re-run against it. It is carried, never merged: two equity factor
-    sets on the right-hand side of one regression would be near-collinear by construction.
+    It is the same library's regional cut of the same five factors, so a result leaning on the
+    Developed spine can be re-run against it. Two differences from the headline are stated rather
+    than smoothed over. The library's momentum file is the Developed one, so this cut is five
+    factors where the headline carries six. And the translation runs through the same euro leg the
+    headline uses, rather than leaving the cross-check in the currency the file happens to quote:
+    a cross-check that silently changed the currency basis would confound region with translation.
     """
     europe = document["factors"]["europe_usd"]
-    return europe[[column for column in europe.columns if column not in NOT_A_FACTOR]]
+    factors = europe[[column for column in europe.columns if column not in NOT_A_FACTOR]]
+    fx_returns = external.monthly_returns(document["factors"]["fx_level"])
+    covered = factors.index.intersection(fx_returns.index)
+    return external.eur_translate(factors.loc[covered], fx_returns)
 
 
 def main(root=None):

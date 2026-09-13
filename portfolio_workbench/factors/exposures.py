@@ -61,9 +61,10 @@ def windows(months, window=WINDOW):
     Yields `(traded month, window months)` for every month with a full trailing window. The
     estimate for month t uses months t-window .. t-1 and is applied to month t: an estimate
     formed at the close of t cannot read t's own bar, which is the walk-forward boundary the
-    availability rule forces. Cutting the windows on the panel rather than on the return
-    frame is what keeps the first traded month where the decision put it, because the return
-    frame starts one month later than the panel does.
+    availability rule forces. Cutting the windows on the panel rather than on the return frame is
+    what keeps the first traded month a full window after the panel opens, since the return frame
+    begins one month later than the panel does; cutting them on the return frame would have moved
+    the first traded month a month late and shortened the out-of-sample run by one.
     """
     months = pd.PeriodIndex(months, freq="M").sort_values()
     for position in range(window, len(months)):
@@ -93,12 +94,13 @@ def _require_observations(block, window_months):
         )
 
 
-def _window_block(frame, window_months):
+def window_block(frame, window_months):
     """A frame's rows for one window, with the front-only absence rule applied.
 
-    Sliced by label rather than by position so a window can never silently take the rows
-    beside the ones it asked for, and the two frames a regression consumes go through this
-    same function so their month counts cannot drift apart between them.
+    Sliced by label rather than by position so a window can never silently take the rows beside
+    the ones it asked for, and shared by every module that cuts a window, so the two frames a
+    regression consumes cannot drift apart and a partially missing row cannot reach a covariance
+    as a NaN the caller never named.
     """
     block = frame.reindex(window_months).dropna(how="any")
     _require_observations(block, window_months)
@@ -172,8 +174,8 @@ def rolling(returns, factors, months, window=WINDOW):
     alpha, t_alpha, r2, resid, explained = [], [], [], [], []
     traded, firsts, lasts, counts = [], [], [], []
     for traded_month, window_months in windows(months, window):
-        block = _window_block(returns, window_months)
-        factors_block = _window_block(factors, window_months)
+        block = window_block(returns, window_months)
+        factors_block = window_block(factors, window_months)
         if not block.index.equals(factors_block.index):
             raise ValueError(
                 f"the sleeve frame and the factor frame cover different months in the window ending "
@@ -220,7 +222,7 @@ def conditioning(factors, months, window=WINDOW):
     pair = ("government_level", "term_slope")
     conditions, correlations = [], []
     for _, window_months in windows(months, window):
-        x = np.asarray(_window_block(factors, window_months), dtype=float)
+        x = np.asarray(window_block(factors, window_months), dtype=float)
         design = np.column_stack([np.ones(len(x)), x])
         conditions.append(float(np.linalg.cond(design)))
         if set(pair) <= set(columns):
@@ -253,9 +255,9 @@ def fixed_alpha(returns, factors, betas, months, window=WINDOW):
     fixed = np.array([betas[column].iloc[0].to_numpy() for column in columns])
     out, traded = [], []
     for traded_month, window_months in windows(months, window):
-        block = _window_block(returns, window_months)
+        block = window_block(returns, window_months)
         y = np.asarray(block, dtype=float)
-        x = np.asarray(_window_block(factors, window_months), dtype=float)
+        x = np.asarray(window_block(factors, window_months), dtype=float)
         out.append(y.mean(axis=0) - fixed.T @ x.mean(axis=0))
         traded.append(traded_month)
     return pd.DataFrame(out, index=pd.PeriodIndex(traded, freq="M"), columns=returns.columns)
@@ -319,10 +321,28 @@ def main(root=None):
     print("[factor] per sleeve, averaged over the refits: alpha, its t-statistic, the world exposure, and "
           "the share of variance the factors explain")
     for sleeve in returns.columns:
-        note = "  <- exact by construction" if sleeve in spanned else ""
+        if sleeve in spanned:
+            print(f"    {sleeve:<16s} spanned by the block by construction: its exposure is the definition "
+                  f"restated, and an alpha of zero over a machine-zero residual is not a test of anything")
+            continue
         print(f"    {sleeve:<16s} alpha {fit['alpha'][sleeve].mean():+.4%}/month t "
               f"{fit['t_alpha'][sleeve].mean():+.2f}  beta(world) {fit['beta']['Mkt-RF'][sleeve].mean():+.2f}  "
-              f"factors explain {fit['r2'][sleeve].mean():.1%} of variance{note}")
+              f"factors explain {fit['r2'][sleeve].mean():.1%} of variance")
+
+    last = fit["traded"][-1]
+    print(f"[factor] the frames are per window, not only the averages above; the newest refit trades "
+          f"{last} on the window {fit['window_first'][-1]}..{fit['window_last'][-1]} "
+          f"({fit['n_obs'][-1]} observations):")
+    for sleeve in returns.columns:
+        if sleeve in spanned:
+            continue
+        explained = float(fit["explained_var"][sleeve].iloc[-1])
+        residual = float(fit["resid_var"][sleeve].iloc[-1])
+        share = explained / (explained + residual) if (explained + residual) else float("nan")
+        print(f"    {sleeve:<16s} alpha {fit['alpha'][sleeve].iloc[-1]:+.4%}/month "
+              f"t {fit['t_alpha'][sleeve].iloc[-1]:+.2f}  beta(world) "
+              f"{fit['beta']['Mkt-RF'][sleeve].iloc[-1]:+.2f}  split {share:.1%} factor / "
+              f"{1.0 - share:.1%} idiosyncratic")
 
     drift = loading_drift(fit["beta"], estimated)
     worst = max(drift, key=lambda column: drift[column]["max"])
@@ -351,9 +371,10 @@ def main(root=None):
           f"on average and the identified exposures by at most {exposure_gap:.2f} (the collinear level and slope "
           f"pair is excluded, since a translation cannot move a coefficient the design does not identify)")
     europe_fit, _, _ = _run(returns, europe, months)
-    print(f"[factor] cross-check on the Europe set: mean |alpha| {europe_fit['alpha'].abs().mean().mean():.4%}/month "
-          f"against {quoted_fit['alpha'].abs().mean().mean():.4%} for the Developed set in its own quoted currency "
-          f"- a different regional cut, carried beside rather than merged")
+    print(f"[factor] cross-check on the Europe cut, five factors rather than six and translated through the same "
+          f"euro leg: mean |alpha| {europe_fit['alpha'][estimated].abs().mean().mean():.4%}/month against "
+          f"{fit['alpha'][estimated].abs().mean().mean():.4%} on the Developed spine, both in euro - a different regional "
+          f"cut carried beside the headline, never merged into it")
     for line in document["warnings"]:
         print(f"[factor] {line}")
     return {"eur": fit, "quoted": quoted_fit, "europe": europe_fit, "returns": returns, "named": named,

@@ -34,12 +34,19 @@ def test_a_spanned_set_is_not_rejected_and_its_loadings_sum_to_one():
     assert result["p_value"] > 0.05, "a spanned benchmark must not be rejected"
 
 
-def test_an_exactly_reproduced_test_asset_is_refused_rather_than_reported():
-    """No noise, no residual, nothing to invert: the arithmetic has no answer here and a zero would
-    read as a spanning verdict."""
-    test_assets, factors = planted()
+def test_a_degenerate_residual_covariance_is_refused_rather_than_reported():
+    """Two ways the statistic has no arithmetic behind it: one test asset a copy of another, and a
+    benchmark that reproduces a test asset exactly. A zero would read as a spanning verdict, so both
+    are refused with the reason rather than returned."""
+    test_assets, factors = planted(assets=2, noise=1e-4)
+    duplicated = test_assets.copy()
+    duplicated["t1"] = duplicated["t0"] * (1.0 + 1e-15)
     with pytest.raises(ValueError, match="cannot be inverted"):
-        spanning.grs(test_assets, factors)
+        spanning.grs(duplicated, factors)
+
+    exact, benchmarks = planted()
+    with pytest.raises(ValueError, match="cannot be inverted"):
+        spanning.grs(exact, benchmarks)
 
 
 def test_a_planted_intercept_is_rejected():

@@ -19,6 +19,12 @@ The reconstruction identity is checked rather than asserted: the residual varian
 the retained components are the discarded eigenvalues, summed. That is arithmetic, not an
 empirical claim, and a violation would mean the factor covariance is not the decomposition it
 is described as.
+
+This module reads the component model from `factors/`, so `risk/` depends on it: the PCA factor
+covariance *is* the statistical family's covariance, and re-extracting the components here to
+avoid the import would be the same model built twice, which is how two modules come to disagree
+about what a component is. The layout's dependency arrows name `risk/ -> data`; the estimator
+Stage B actually varies needs `factors` as well.
 """
 
 import numpy as np

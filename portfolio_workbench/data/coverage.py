@@ -11,6 +11,8 @@ warnings and the cost of the joins in front of a reader before any result is quo
 
 import sys
 
+import numpy as np
+
 from . import loader, panel
 
 
@@ -50,11 +52,20 @@ def main(root=None):
         print(f"[data] factor months with no euro leg are not translated: "
               f"{factors['untranslated']} (outside the panel, so no return is affected)")
     risk_free = document["risk_free"]
+    daily = risk_free["daily"]
     rf = risk_free["monthly"].reindex(months)
     print(f"[data] risk-free: overnight series spliced at the benchmark transition, overlap "
           f"{risk_free['overlap_days']} days at {risk_free['basis_bp']:+.1f} bp")
     print(f"[data] risk-free accrued daily at /360: mean {rf.mean():.4%}/month over the panel, "
           f"min {rf.min():.4%}, max {rf.max():.4%}")
+    # The counterfactual the accrual rule exists to exclude, computed here rather than shipped as a
+    # callable: one annualised figure read as a per-period rate gives a month no portfolio could
+    # clear, and a reader who is shown only the correct path cannot tell a units error from a quiet
+    # market. The ECB publishes an annualised rate, so reading it per period is a units error of the
+    # whole accrual base rather than a small one.
+    naive = float(np.prod(1.0 + daily.to_numpy()[:21] / 100.0) - 1.0)
+    print(f"[data] the trap that rule closes: the same annualised rate compounded as a per-period rate "
+          f"gives {naive:.0%} in a month")
     for line in document["warnings"]:
         print(f"[data] {line}")
     return document

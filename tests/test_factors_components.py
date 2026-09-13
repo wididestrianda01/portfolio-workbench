@@ -1,8 +1,6 @@
 """The count rule: what it retains on planted structure, what it refuses on noise, and the
 identities the null, the sign convention and the rotation have to satisfy."""
 
-import itertools
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -45,7 +43,12 @@ def test_the_rule_does_not_invent_structure_in_noise():
     assert decomposition["eigenvalues"][0] < decomposition["threshold"][0] * 1.05
 
 
-def test_the_mp_edge_matches_the_closed_form_the_decisions_quote():
+def test_the_mp_edge_matches_the_closed_form_the_sanity_check_targets():
+    """The executed sanity check pins the closed form at eleven series over 191 and 60 observations,
+    and the report's analytic cross-check has to reproduce those rather than a nearby number. The
+    plan's prose quotes 1.58 and 2.14 in this position, which are the simulated 95th percentiles of
+    a normal null rather than the edge; the matched empirical null this module uses sits above both,
+    because it keeps the panel's own marginal distributions."""
     assert cp.mp_edge(11, 191) == pytest.approx(1.53759, rel=1e-4)
     assert cp.mp_edge(11, 60) == pytest.approx(2.03970, rel=1e-4)
 
@@ -89,16 +92,16 @@ def test_varimax_rotates_without_changing_the_model():
     assert float(np.trace(rotated.T @ rotated)) == pytest.approx(float(np.trace(loadings.T @ loadings)), rel=1e-12)
 
 
-def test_the_falsification_falls_back_to_the_fixed_count(monkeypatch):
+def test_the_falsification_falls_back_to_the_fixed_count():
     """A count that jumps by more than one component between adjacent steps, in more than a quarter
-    of them, is a rule choosing the answer as much as measuring it; the decision pre-specified the
-    fallback and both counts are reported."""
-    frame = planted(common=2, periods=200)
-    calendar = frame.index
-    sequence = [1, 3, 1, 3, 1, 3, 1, 3]
-    calls = itertools.cycle(sequence)
-    monkeypatch.setattr(cp, "retained", lambda *args, **kwargs: next(calls))
-    series = cp.count_series(frame, calendar, window=100, draws=5)
-    assert series["falsified"] is True
-    assert set(series["counts"]) == {cp.PREREGISTERED_K}
-    assert list(series["mechanical"][: len(sequence)]) == sequence
+    of them, is a rule choosing the answer as much as measuring it: the fallback fixed before the
+    rule was run uses the fixed count and reports both. A move of exactly one is not a jump."""
+    steady = cp.decide([2, 2, 3, 3, 2, 2])
+    assert steady["falsified"] is False
+    assert steady["move_share"] == 0.0
+    assert list(steady["counts"]) == [2, 2, 3, 3, 2, 2]
+
+    jumping = cp.decide([1, 3, 1, 3, 1, 3])
+    assert jumping["falsified"] is True
+    assert set(jumping["counts"]) == {cp.PREREGISTERED_K}
+    assert list(jumping["mechanical"]) == [1, 3, 1, 3, 1, 3]
