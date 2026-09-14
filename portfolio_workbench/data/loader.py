@@ -181,7 +181,10 @@ def load_panel(root=None, as_of=None):
 
     prices = _load_role(root, document, "price", REQUIRED_PRICE_COLUMNS, "price")
     fx = _load_role(root, document, "fx", REQUIRED_FX_COLUMNS, "fx")
-    facts = document.get("instruments", {})
+    # Read rather than defaulted: `verify` has refused any manifest without them, and an empty
+    # mapping here would turn the dividend-blind stop and the liquidity floor into rules that
+    # cannot fire, which is the failure the gate exists to prevent rather than to reproduce.
+    facts = document["instruments"]
     factors = load_factors(root, document)
     risk_free = load_risk_free(root, document)
 

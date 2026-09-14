@@ -125,14 +125,29 @@ def verify(root):
     """Re-derive every entry and refuse to proceed on any difference.
 
     The whole snapshot is verified on every load: it is a few dozen small files, and
-    a partial check is the failure mode this module exists to prevent.
+    a partial check is the failure mode this module exists to prevent. The record's own
+    completeness is part of that check rather than an assumption about the fetch: a
+    manifest that describes no issuer states no income policy and no fund size, and the
+    quality gate reads both.
     """
     root = Path(root)
     document = read(root)
+    for field, why in (
+        ("files", "there is nothing to verify"),
+        ("instruments", "the issuer facts the quality gate reads cannot be recovered"),
+    ):
+        if not document.get(field):
+            raise ManifestError(f"{root}: the manifest carries no {field}: {why}")
     for entry in document["files"]:
         missing = [field for field in FILE_FIELDS if field not in entry]
         if missing:
             raise ManifestError(f"{entry.get('path', '?')}: manifest entry lacks {missing}")
+        if entry.get("role") == "price" and entry.get("instrument") not in document["instruments"]:
+            raise ManifestError(
+                f"{entry.get('instrument') or entry['path']}: priced in the snapshot but the manifest "
+                f"records no issuer facts for it; the income policy and the fund size the quality gate "
+                f"reads are absent, and an absent policy reads as a line that does not distribute"
+            )
         path = root / entry["path"]
         if not path.exists():
             raise ManifestError(f"{entry['path']}: in the manifest, absent from the snapshot")

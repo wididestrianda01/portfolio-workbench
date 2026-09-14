@@ -6,7 +6,11 @@ qualifies - never in a footnote, because a qualification a reader has to go look
 is a qualification that gets dropped.
 
 The eighth stop, a manifest mismatch, is enforced by `manifest.verify` before any frame
-is built, since it is a property of the files rather than of the loaded table.
+is built, since it is a property of the files rather than of the loaded table, and again
+by `issuer_facts` for every priced line that reaches a rule reading the issuer facts: a
+manifest that describes no issuer is a manifest fault, and reading the absence as "does
+not distribute" is what would let the dividend-blind stop and the liquidity floor pass a
+panel neither of them examined.
 """
 
 import re
@@ -14,7 +18,7 @@ import re
 import pandas as pd
 
 from . import panel
-from .universe import SLEEVES, WINDOW_START
+from .universe import FX_QUOTES, SLEEVES, WINDOW_START
 
 # A monthly move beyond the bound stated for that sleeve is a data fault rather than a
 # market event at these sizes, and the bound travels per sleeve because the sleeves do not
@@ -77,7 +81,27 @@ def _months(frame):
     return pd.PeriodIndex(frame["period_month"], freq="M")
 
 
-def income_policy(facts, instrument):
+def issuer_facts(facts, instrument):
+    """The manifest's issuer facts for a priced line, or the refusal to screen it without any.
+
+    Two rules read this field - the dividend-blind stop and the liquidity floor - and both are
+    written so that an absent entry cannot be read as an answer: no policy is not the same as an
+    accumulating policy, and no fund size is not the same as a fund too large to be thin. The FX
+    legs are the one exemption, and it is the quoted-series map that grants it, not their absence
+    from the manifest: a level is not a fund and no issuer describes one.
+    """
+    if instrument in FX_QUOTES:
+        return None
+    if instrument not in facts:
+        raise DataStop(
+            "manifest mismatch",
+            f"{instrument} is priced but the manifest records no issuer facts for it; its income "
+            f"policy and fund size cannot be read, so neither gate below can be applied",
+        )
+    return facts[instrument]
+
+
+def income_policy(entry):
     """The issuer's declared income policy, and whether it means the line pays out.
 
     The field is free text in the manifest - "distributing (semi-annual)", "accumulating",
@@ -85,7 +109,7 @@ def income_policy(facts, instrument):
     read that answer rather than parsing the string for themselves. An accumulating line
     and a metal line are both non-payers, and the two rules must agree on that.
     """
-    policy = str(facts.get(instrument, {}).get("income_policy", "")).lower()
+    policy = str(entry.get("income_policy", "")).lower()
     return policy, policy.startswith("distributing")
 
 
@@ -184,7 +208,10 @@ def stop_dividend_blind(frame, facts):
     total-return label. Nothing downstream can repair that, and the failure is silent.
     """
     for instrument, block in frame.groupby("instrument"):
-        policy, pays_out = income_policy(facts, instrument)
+        entry = issuer_facts(facts, instrument)
+        if entry is None:
+            continue
+        policy, pays_out = income_policy(entry)
         if pays_out and float(block["dividend"].fillna(0.0).sum()) == 0.0:
             raise DataStop(
                 "distributing line with no distribution",
@@ -251,10 +278,10 @@ def warn_thin_liquidity(frame, facts, rates, floor=LIQUIDITY_FLOOR_EUR):
     """
     thin, unscreened = [], []
     for instrument in sorted(frame["instrument"].unique()):
-        if instrument not in facts:
-            # The FX legs are not funds and the manifest describes no issuer for them.
+        entry = issuer_facts(facts, instrument)
+        if entry is None:
             continue
-        reported = facts[instrument].get("fund_size")
+        reported = entry.get("fund_size")
         size = fund_size_eur(reported, rates)
         if size is None:
             unscreened.append(f"{instrument} ({reported or 'no size recorded'})")
@@ -295,7 +322,10 @@ def warn_extra_distributions(frame, facts):
         events = block[block["dividend"].fillna(0.0) > 0]
         if not len(events):
             continue
-        policy, pays_out = income_policy(facts, instrument)
+        entry = issuer_facts(facts, instrument)
+        if entry is None:
+            continue
+        policy, pays_out = income_policy(entry)
         if not pays_out:
             out.append(
                 f"WARNING unexpected distribution: {instrument} is declared '{policy}' yet carries "

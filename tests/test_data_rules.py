@@ -54,17 +54,38 @@ def planted_frame():
     return pd.DataFrame(rows)
 
 
+RULES = {
+    "missing column": lambda frame: quality.stop_missing_columns(
+        frame, ("date", "close", "adj_close", "dividend"), "planted.csv"
+    ),
+    "malformed date": quality.stop_malformed_dates,
+    "missing bar": quality.stop_missing_bars,
+    "distributing line with no distribution": lambda frame: quality.stop_dividend_blind(frame, FACTS),
+    "implausible level": quality.stop_implausible_prices,
+    "implausible move": quality.stop_implausible_prices,
+}
+
+
 def fire(rule, frame):
-    if rule == "missing column":
-        quality.stop_missing_columns(frame, ("date", "close", "adj_close", "dividend"), "planted.csv")
-    elif rule == "malformed date":
-        quality.stop_malformed_dates(frame)
-    elif rule == "missing bar":
-        quality.stop_missing_bars(frame)
-    elif rule == "distributing line with no distribution":
-        quality.stop_dividend_blind(frame, FACTS)
-    else:
-        quality.stop_implausible_prices(frame)
+    """Run the rule a parametrised plant expects, keyed by the name the gate itself raises with.
+
+    The key is that name, so the table below states each rule's identity once and the assertion on
+    the raised rule is what couples the dispatch to the gate's vocabulary: a rule renamed in the
+    gate fails here rather than leaving a plant that quietly dispatched on nothing.
+    """
+    RULES[rule](frame)
+
+
+def snapshot_copy(frozen, tmp_path):
+    """A byte copy of the frozen fixture, so a plant that doctors the snapshot leaves the original."""
+    copy = tmp_path / "2026-09-13"
+    copy.mkdir()
+    for path in frozen.rglob("*"):
+        if path.is_file():
+            target = copy / path.relative_to(frozen)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(path.read_bytes())
+    return copy
 
 
 def test_the_joined_panel_holds_the_declared_shape_and_the_as_of_rule(frozen):
@@ -175,13 +196,7 @@ def test_each_snapshot_stop_fires_on_its_planted_snapshot(tmp_path, kwargs, rule
 def test_the_manifest_refuses_a_tampered_snapshot(frozen, tmp_path):
     """A checksum, a row count and a missing file each stop the load, and a factor archive that no
     longer parses arrives in the same vocabulary rather than as a bare parse error."""
-    copy = tmp_path / "2026-09-13"
-    copy.mkdir()
-    for path in frozen.rglob("*"):
-        if path.is_file():
-            target = copy / path.relative_to(frozen)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(path.read_bytes())
+    copy = snapshot_copy(frozen, tmp_path)
     loader.load_panel(copy)
 
     tampered = json.loads((copy / "manifest.json").read_text())
@@ -205,6 +220,49 @@ def test_the_manifest_refuses_a_tampered_snapshot(frozen, tmp_path):
     path = _french_zip(tmp_path / "Developed_5_Factors.zip", "Developed_5_Factors.csv", ["Mkt-RF"], empty, "vintage")
     with pytest.raises(manifest.ManifestError, match="no monthly rows"):
         manifest.measure(path)
+
+
+def test_a_priced_line_the_manifest_does_not_describe_stops_the_gate():
+    """The issuer facts are what the dividend-blind stop and the liquidity floor read, so an absent
+    entry has to refuse the frame. Read as "does not distribute" it silences the first rule, and read
+    as "not a fund" it silences the second, and both would then pass a panel neither had examined."""
+    frame = planted_frame().assign(instrument="CCC")
+    with pytest.raises(quality.DataStop) as stop:
+        quality.stop_dividend_blind(frame, FACTS)
+    assert stop.value.rule == "manifest mismatch"
+    with pytest.raises(quality.DataStop) as stop:
+        quality.warn_thin_liquidity(frame, FACTS, {})
+    assert stop.value.rule == "manifest mismatch"
+
+
+def test_the_fx_legs_are_the_one_exemption_from_the_issuer_facts(frozen):
+    """A level is not a fund, so the quoted-series map grants the exemption rather than the line's
+    absence from the manifest doing it. Every priced line is described, which is what lets the gate
+    read a policy and a size for each of them."""
+    document = manifest.read(frozen)
+    priced = {entry["instrument"] for entry in document["files"] if entry["role"] == "price"}
+    assert priced == set(document["instruments"]) == set(universe.TICKERS)
+    assert not priced & set(universe.FX_QUOTES)
+    assert quality.issuer_facts({}, "EURUSD=X") is None
+
+
+def test_a_manifest_that_describes_no_issuer_refuses_the_snapshot(frozen, tmp_path):
+    """The record's own completeness is checked with its checksums: a manifest carrying no issuer
+    facts, and one carrying none for a single priced line, each stop the load rather than arriving at
+    the gate as a rule that cannot fire."""
+    copy = snapshot_copy(frozen, tmp_path)
+    whole = manifest.read(frozen)
+
+    without_block = {key: value for key, value in whole.items() if key != "instruments"}
+    (copy / "manifest.json").write_text(json.dumps(without_block))
+    with pytest.raises(manifest.ManifestError, match="carries no instruments"):
+        loader.load_panel(copy)
+
+    missing_line = json.loads(json.dumps(whole))
+    del missing_line["instruments"]["IWDP.AS"]
+    (copy / "manifest.json").write_text(json.dumps(missing_line))
+    with pytest.raises(manifest.ManifestError, match="no issuer facts"):
+        loader.load_panel(copy)
 
 
 def test_each_warning_prints_beside_the_value_it_qualifies(frozen):
@@ -254,13 +312,7 @@ def test_the_manifest_records_the_vintage_and_the_currency_of_every_leg(frozen, 
     assert factors and all(str(SEED) in entry["vintage"] for entry in factors), "the stamp is recorded"
     assert {e["instrument"]: e["currency"] for e in document["files"] if e["role"] == "fx"} == universe.FX_QUOTES
 
-    copy = tmp_path / "2026-09-13"
-    copy.mkdir()
-    for path in frozen.rglob("*"):
-        if path.is_file():
-            target = copy / path.relative_to(frozen)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(path.read_bytes())
+    copy = snapshot_copy(frozen, tmp_path)
     loader.load_panel(copy)
 
     doctored = json.loads((copy / "manifest.json").read_text())
