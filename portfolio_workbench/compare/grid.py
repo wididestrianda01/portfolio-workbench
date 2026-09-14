@@ -172,13 +172,19 @@ def run_cell(spec, returns, months, cache=None):
         targets.append(target)
         books.append(book)
         turnover.append(traded_turnover)
-        cap_binding.append(int((book > spec["cap"] - 1e-9).sum()))
+        cap_binding.append(int((book > spec["cap"] - constraints.CAP_TOLERANCE).sum()))
         turnover_binding.append(binding)
-        gross.append(realised + step_cost)
-        net.append(realised)
+        # The book earns its market return and the trade is paid for out of it, so the cost is
+        # charged to the net series and the gross series is the book's own return. Adding it to the
+        # gross instead credits every cell with its own turnover, and the cost-adjusted series the
+        # acceptance bar reads then pays nothing at all - on this panel a cell's annual cost is the
+        # same order as the differences the comparison exists to detect.
+        gross.append(realised)
+        net.append(realised - step_cost)
 
     index = pd.PeriodIndex(index, freq="M")
     weights = pd.DataFrame(books, index=index)
+    target_path = pd.DataFrame(targets, index=index)
     gross_series = pd.Series(gross, index=index, name=spec["id"])
     net_series = pd.Series(net, index=index, name=spec["id"])
     turnover_series = pd.Series(turnover, index=index)
@@ -199,7 +205,14 @@ def run_cell(spec, returns, months, cache=None):
         "cap_binding_mean": float(np.mean(cap_binding)),
         "cap_binding_steps": int(sum(value > 0 for value in cap_binding)),
         "turnover_cap_binding_steps": int(sum(turnover_binding)),
-        "concentration": float(np.mean(1.0 / (weights ** 2).sum(axis=1))),
+        # The estimation-error proxies are read off the target path, and the traded path is reported
+        # beside each of them: the band and the turnover cap move a book away from its target, so a
+        # concentration measured on the books answers a question about the trading rules rather than
+        # about the estimator under test, and the gap between the two is what the rules cost.
+        "concentration": float(np.mean(1.0 / (target_path ** 2).sum(axis=1))),
+        "concentration_traded": float(np.mean(1.0 / (weights ** 2).sum(axis=1))),
+        "max_single_weight": float(target_path.to_numpy().max()),
+        "max_single_weight_traded": float(weights.to_numpy().max()),
         "target_movement": float(np.mean(movements)) if movements else 0.0,
         "establishment": establishment,
         "gross_cumulative": float((1.0 + gross_series).prod() - 1.0),
@@ -333,16 +346,11 @@ def write_manifests(document, results, root=None):
     directory = Path(root) if root is not None else DEFAULT_RUN_ROOT / document["snapshot_id"]
     directory.mkdir(parents=True, exist_ok=True)
     written = []
-    for result in grid_results(results):
+    for result in results:
         path = directory / f"{result['id']}.json"
         path.write_text(json.dumps(manifest(result, document), indent=2, default=str) + "\n")
         written.append(path)
     return written
-
-
-def grid_results(results):
-    """The run records in whatever the caller passed: a grid's mapping or a list of runs."""
-    return results["results"] if isinstance(results, dict) else results
 
 
 def report(grid, document):
@@ -361,6 +369,11 @@ def report(grid, document):
               f"{summary['measured_rebalances']} rebalances  establishment "
               f"{summary['establishment']['cost'] * 1e4:.2f} bp")
         details = []
+        details.append(
+            f"effective sleeve count {summary['concentration']:.2f} on the target path, "
+            f"{summary['concentration_traded']:.2f} traded, largest weight "
+            f"{summary['max_single_weight']:.3f} against {summary['max_single_weight_traded']:.3f}"
+        )
         if summary["components"] is not None:
             details.append(f"retained components {summary['components']}")
         if summary["estimator_intensity"] is not None:

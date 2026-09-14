@@ -217,3 +217,45 @@ def test_the_turnover_cap_binding_is_recorded_with_the_trade_it_capped():
                 )
             else:
                 assert float(turnover) < constraints.TURNOVER_CAP + 1e-12
+
+
+def test_the_cost_is_charged_to_the_net_series_on_traded_notional():
+    """The convention the layer reports on: gross is the book's own return and net is gross less two
+    times the one-way turnover at the per-side rate, with the establishment trade outside both because
+    it is funded before the measured window opens. Computed the other way round - the cost added to the
+    gross - every cell's net series is the cost-free one and its cost arrives as a gain, which reads
+    the cost question backwards: the number separating the cells is the same order as what this charges.
+    """
+    returns, months = planted_panel()
+    for identifier in ("minimum_variance", "mean_cvar", "mean_variance_sample"):
+        spec = next(run for run in registry.RUNS if run["id"] == identifier)
+        result = grid.run_cell(spec, returns, months)
+        raw = (result["weights"].to_numpy() * returns.loc[result["traded"]].to_numpy()).sum(axis=1)
+        charged = 2.0 * result["turnover"].to_numpy() * constraints.COST_BP / 1e4
+
+        assert np.allclose(result["gross"], raw), f"{identifier}: the gross series is not the book's return"
+        assert np.allclose(result["net"], raw - charged), f"{identifier}: the cost is not charged to net"
+        assert charged[0] == 0.0, "the funded book is not a measured rebalance and pays no cost"
+        assert float(result["summary"]["net_cumulative"]) < float(result["summary"]["gross_cumulative"])
+
+
+def test_the_estimation_error_diagnostics_are_read_off_the_target_path():
+    """Weight concentration is one of the two proxies for estimation error, so it is measured before
+    the no-trade band and the turnover cap move the book away from its target: read off the traded
+    books it answers a question about the trading rules instead, and the cell's concentration then moves
+    with the band rather than with the estimator under test. Both paths are reported, so the gap between
+    them is visible as what the rules cost rather than hidden inside the number."""
+    returns, months = planted_panel()
+    for identifier in ("minimum_variance", "mean_variance_sample"):
+        spec = next(run for run in registry.RUNS if run["id"] == identifier)
+        result = grid.run_cell(spec, returns, months)
+        target_count = float(np.mean(1.0 / (result["targets"].to_numpy() ** 2).sum(axis=1)))
+        traded_count = float(np.mean(1.0 / (result["weights"].to_numpy() ** 2).sum(axis=1)))
+
+        assert result["summary"]["concentration"] == pytest.approx(target_count), (
+            f"{identifier}: the reported concentration is not the target path's"
+        )
+        assert result["summary"]["concentration_traded"] == pytest.approx(traded_count)
+        assert target_count != pytest.approx(traded_count), (
+            f"{identifier}: the two paths agree, so this plant cannot tell them apart"
+        )
