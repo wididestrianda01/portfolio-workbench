@@ -9,6 +9,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from portfolio_workbench.compare import grid, registry
+from portfolio_workbench.construct import constraints
+from portfolio_workbench.data import universe
 from portfolio_workbench.factors import components as cp
 from portfolio_workbench.factors import exposures, spanning, spine
 from portfolio_workbench.risk import covariance
@@ -145,3 +148,72 @@ def test_a_degenerate_input_is_refused_rather_than_solved():
 
     with pytest.raises(ValueError, match="repeated instrument"):
         covariance.sample(pd.DataFrame(rng.normal(0, 0.01, (30, 3)), columns=["a", "a", "b"]))
+
+
+# --------------------------------------------------------------- the construct boundary
+
+CALENDAR_FULL = pd.period_range("2010-09", "2026-07", freq="M")
+
+
+def planted_panel(periods=75, seed=12):
+    """A planted sleeve frame carrying the real sleeve names, so the grid's rules can be exercised
+    without the frozen snapshot: the policy weights and the sleeve map are what the runner reads."""
+    rng = np.random.default_rng(seed)
+    names = list(universe.TICKERS)
+    months = CALENDAR_FULL[:periods]
+    frame = pd.DataFrame(rng.normal(0.002, 0.02, (periods, len(names))), index=months, columns=names)
+    return frame, months
+
+
+def test_the_expanding_protocol_trades_the_same_months_and_still_cannot_look_ahead():
+    """The secondary protocol answers whether a result is an artefact of a fixed window length, so it
+    has to trade the same months with a longer estimate. The boundary is unchanged: an estimate formed
+    at the close of t-1 cannot read t's own bar, and the window grows from the decided length."""
+    rolling = list(exposures.windows(CALENDAR))
+    expanding = list(exposures.expanding_windows(CALENDAR))
+    assert [traded for traded, _ in expanding] == [traded for traded, _ in rolling]
+    assert expanding[0][1][0] == CALENDAR[0] and len(expanding[0][1]) == exposures.WINDOW
+    assert len(expanding[-1][1]) == len(CALENDAR) - 1
+    for traded, window in expanding:
+        assert window[-1] == traded - 1
+
+
+def test_every_measured_rebalance_respects_the_constraint_set_on_a_planted_panel():
+    """The rules the grid applies between a target and a book: the band, the cap it must not exceed,
+    and the funding adjustment that closes the band's residual. Read off the run itself rather than
+    off the rules in isolation, because the failure this defends against is a rule that is correct
+    alone and applied in the wrong order."""
+    returns, months = planted_panel()
+    for identifier in ("minimum_variance", "hierarchical_risk_parity", "mean_cvar"):
+        spec = next(run for run in registry.RUNS if run["id"] == identifier)
+        result = grid.run_cell(spec, returns, months)
+        books = result["weights"]
+        assert len(books) == len(months) - exposures.WINDOW
+        assert float(books.to_numpy().min()) >= -1e-12
+        for _, book in books.iterrows():
+            assert float(book.sum()) == pytest.approx(1.0, abs=1e-9), f"{identifier} left a book not fully invested"
+            assert float(book.max()) <= constraints.CAP + 1e-12, f"{identifier} breached the per-sleeve cap"
+            assert float(book.min()) >= 0.0, f"{identifier} went short"
+        measured = result["turnover"].iloc[1:]
+        assert len(measured) == len(books) - 1
+        assert float(measured.max()) <= constraints.TURNOVER_CAP + 1e-12, f"{identifier} breached the turnover cap"
+        assert result["summary"]["establishment"]["cost"] > 0.0, "the establishment trade is reported per cell"
+        assert float(result["turnover"].iloc[0]) == 0.0, "the funded book is not a measured rebalance"
+
+
+def test_the_turnover_cap_binding_is_recorded_with_the_trade_it_capped():
+    """A cap that binds silently is a rule applied without a record, and a flag that reports binding
+    while the trade sits under the cap is a record of nothing. The two are read together: a flagged
+    rebalance trades exactly the cap, an unflagged one trades less, and neither exceeds it."""
+    returns, months = planted_panel()
+    for identifier in ("minimum_variance", "mean_cvar", "maximum_diversification"):
+        spec = next(run for run in registry.RUNS if run["id"] == identifier)
+        result = grid.run_cell(spec, returns, months)
+        for binding, turnover in zip(result["turnover_binding"].iloc[1:], result["turnover"].iloc[1:]):
+            assert float(turnover) <= constraints.TURNOVER_CAP + 1e-12, f"{identifier} breached the cap"
+            if binding:
+                assert float(turnover) == pytest.approx(constraints.TURNOVER_CAP, abs=1e-12), (
+                    f"{identifier} reports the cap binding without trading it"
+                )
+            else:
+                assert float(turnover) < constraints.TURNOVER_CAP + 1e-12

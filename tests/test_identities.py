@@ -8,6 +8,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from portfolio_workbench.compare import registry
+from portfolio_workbench.construct import constraints
+from portfolio_workbench.construct import families as construct_families
+from portfolio_workbench.construct import means as construct_means
+from portfolio_workbench.data import universe
 from portfolio_workbench.factors import components as cp
 from portfolio_workbench.factors import exposures, spanning, spine
 from portfolio_workbench.risk import covariance
@@ -181,3 +186,255 @@ def test_the_estimators_are_what_they_claim_to_be():
     series = pd.Series(np.linspace(-0.02, 0.04, 60), index=pd.period_range("2000-01", periods=60, freq="M"), name="f")
     stats = spanning.premiums(series.to_frame())["f"]
     assert stats["t"] == pytest.approx(float(series.mean() / (series.std(ddof=1) / np.sqrt(60))), rel=1e-12)
+
+
+# ------------------------------------------------------------------ the construct layer
+
+def diagonal(variances):
+    """A labelled diagonal covariance, so a closed form can be written down for it."""
+    names = list(variances)
+    return pd.DataFrame(np.diag([variances[name] for name in names]), index=names, columns=names)
+
+
+def test_the_constraint_set_is_a_capped_simplex_rather_than_a_clip():
+    """Clipping a weight at the cap and renormalising leaves the vector over the cap it just enforced.
+    The projection fills the cap exactly and spreads what it removed by the room the other sleeves have
+    left; a cap the sleeve count cannot satisfy is refused rather than returned as a book that cannot
+    exist."""
+    assert constraints.bounded_simplex(np.array([0.9, 0.05, 0.05]), cap=0.5) == pytest.approx([0.5, 0.25, 0.25], abs=1e-12)
+    assert constraints.bounded_simplex(np.array([0.1, 0.3, 0.6]), cap=0.6) == pytest.approx([0.1, 0.3, 0.6], abs=1e-12)
+    assert constraints.bounded_simplex(np.array([-0.2, 1.2]), cap=1.0) == pytest.approx([0.0, 1.0], abs=1e-12)
+    with pytest.raises(ValueError, match="cannot be satisfied"):
+        constraints.bounded_simplex(np.array([0.5, 0.5]), cap=0.35)
+
+
+def test_the_band_bounds_drift_and_the_trade_is_scaled_to_the_turnover_cap():
+    """The band is the rule that stops the book churning on noise, and it does not bound turnover: a
+    trade twice the cap is scaled toward the target, lands on a convex combination of two feasible
+    books, and reports the cap as binding. The cost is then charged on traded notional, which is twice
+    the one-way turnover, and the establishment trade is the whole book once."""
+    current = pd.Series([0.5, 0.3, 0.2], index=list("abc"))
+    target = pd.Series([0.505, 0.10, 0.395], index=list("abc"))
+    banded = constraints.banded(target, current, band=0.01)
+    assert banded["a"] == pytest.approx(0.5), "a move inside the band is not a trade"
+
+    rebalance = constraints.rebalance(target, current, band=0.01, cap=0.05)
+    assert rebalance["binding"] is True
+    assert rebalance["turnover"] == pytest.approx(0.05, abs=1e-12)
+    assert rebalance["weights"].sum() == pytest.approx(1.0, abs=1e-12)
+    assert rebalance["untaken"] > 0.0, "the trade that was not taken is reported, not dropped"
+    assert list(rebalance["weights"].index) == list("abc")
+
+    assert constraints.cost(0.05, bp=10.0) == pytest.approx(0.0001, abs=1e-15)
+    assert constraints.establishment(pd.Series([0.5, 0.5], index=list("ab")))["cost"] == pytest.approx(0.001, abs=1e-15)
+
+
+def test_every_constructor_returns_a_labelled_book_the_constraint_set_allows():
+    """One interface, one constraint set: each family returns a fully invested, long-only book inside
+    the cap, labelled in the covariance's own order, so a reordering cannot misalign it against the
+    returns."""
+    rng = np.random.default_rng(3)
+    names = list(universe.TICKERS)
+    frame = pd.DataFrame(rng.normal(0, 0.02, (80, len(names))), columns=names)
+    matrix = pd.DataFrame(np.cov(frame, rowvar=False, ddof=1), index=names, columns=names)
+    vector = frame.mean()
+    for name, family in construct_families.FAMILIES.items():
+        book = family(matrix, vector, frame)
+        assert list(book.index) == names, f"{name} lost the sleeve map's order"
+        assert float(book.sum()) == pytest.approx(1.0, abs=1e-12), f"{name} is not fully invested"
+        assert float(book.min()) >= 0.0, f"{name} went short"
+        assert float(book.max()) <= constraints.CAP + 1e-12, f"{name} breached the cap"
+
+
+def test_minimum_variance_and_maximum_diversification_match_their_closed_forms():
+    """On a diagonal covariance both optima are known in closed form: minimum variance weights each
+    sleeve by the reciprocal of its variance, maximum diversification by the reciprocal of its
+    volatility. The second is the reason the family is called diversification - the ratio is scale
+    free, so the fully invested constraint is what fixes its scale."""
+    matrix = diagonal({"a": 0.04, "b": 0.01, "c": 0.09})
+    inverse_variance = (1.0 / np.diag(matrix))
+    inverse_volatility = (1.0 / np.sqrt(np.diag(matrix)))
+    assert construct_families.minimum_variance(matrix, cap=1.0).to_numpy() == pytest.approx(
+        inverse_variance / inverse_variance.sum(), abs=1e-7
+    )
+    assert construct_families.maximum_diversification(matrix, cap=1.0).to_numpy() == pytest.approx(
+        inverse_volatility / inverse_volatility.sum(), abs=1e-7
+    )
+
+
+def test_the_diversification_gradient_is_the_derivative_of_the_ratio_it_optimises():
+    """The objective is left to the solver's own difference quotient everywhere it is well behaved, and
+    written out here only because the quotient near a boundary optimum stalls the line search. A
+    gradient that is not the derivative returns a plausible book for a different problem, so it is
+    checked against a central difference on the same planted covariance."""
+    rng = np.random.default_rng(8)
+    names = ["a", "b", "c", "d"]
+    frame = pd.DataFrame(rng.normal(0, 0.02, (80, 4)), columns=names)
+    matrix = np.cov(frame, rowvar=False, ddof=1)
+    spread = np.sqrt(np.diag(matrix))
+    ratio = lambda w: float(w @ spread) / np.sqrt(float(w @ matrix @ w))
+    gradient = lambda w: -(spread / np.sqrt(float(w @ matrix @ w))
+                           - (w @ spread) * (matrix @ w) / float(w @ matrix @ w) ** 1.5)
+    point = np.full(4, 0.25)
+    step = 1e-7
+    difference = np.array([
+        (ratio(point + step * np.eye(4)[position]) - ratio(point - step * np.eye(4)[position])) / (2 * step)
+        for position in range(4)
+    ])
+    assert gradient(point) == pytest.approx(-difference, abs=1e-8)
+
+
+def test_equal_risk_contribution_equalises_the_contributions_and_they_sum_to_volatility():
+    """The portfolio is defined by its contributions rather than by an objective that approximates
+    them, so the check is that the contributions the returned book produces are equal, and that they
+    sum to the book's volatility - the additivity the whole risk-budget layer rests on."""
+    matrix = pd.DataFrame(
+        [[0.04, 0.01, 0.0], [0.01, 0.09, 0.02], [0.0, 0.02, 0.01]],
+        index=list("abc"),
+        columns=list("abc"),
+    )
+    def contributions(book, values):
+        volatility = float(np.sqrt(book @ values @ book))
+        return book * (values @ book) / volatility, volatility
+
+    values = matrix.to_numpy()
+    book = construct_families.erc(matrix, cap=1.0).to_numpy()
+    spread, volatility = contributions(book, values)
+    assert spread.max() - spread.min() < 1e-6 * volatility, "the contributions are the portfolio, not a proxy for it"
+    assert float(spread.sum()) == pytest.approx(volatility, rel=1e-10)
+
+    # With the cap binding the equal-contribution point is unreachable, so the most that can be asked
+    # of the constrained solve is that it is at least as even as the book it started from.
+    bounded = construct_families.erc(matrix, cap=0.4).to_numpy()
+    even, _ = contributions(np.full(3, 1 / 3), values)
+    capped, _ = contributions(bounded, values)
+    assert capped.max() - capped.min() <= even.max() - even.min() + 1e-12
+
+    plain = diagonal({"a": 0.04, "b": 0.01, "c": 0.09})
+    inverse_volatility = 1.0 / np.sqrt(np.diag(plain))
+    assert construct_families.erc(plain, cap=1.0).to_numpy() == pytest.approx(
+        inverse_volatility / inverse_volatility.sum(), abs=1e-7
+    )
+
+
+def test_hierarchical_risk_parity_splits_by_cluster_variance():
+    """With every sleeve alike the bisection has nothing to split on and returns the equal-weight book
+    exactly. With two clusters of equal within-cluster variance, the top-level split is the hand
+    calculation: each side takes the other side's cluster variance over the sum."""
+    alike = diagonal({name: 0.04 for name in "abcd"})
+    assert construct_families.hierarchical_risk_parity(alike).to_numpy() == pytest.approx(np.full(4, 0.25), abs=1e-9)
+
+    rng = np.random.default_rng(9)
+    months = pd.period_range("2000-01", periods=120, freq="M")
+    quiet = rng.normal(0, 0.01, (120, 2)) @ np.array([[1.0, 0.8], [0.8, 1.0]]) ** 0.5
+    loud = rng.normal(0, 0.04, (120, 2)) @ np.array([[1.0, 0.8], [0.8, 1.0]]) ** 0.5
+    frame = pd.DataFrame(np.hstack([quiet, loud]), index=months, columns=["q0", "q1", "l0", "l1"])
+    matrix = pd.DataFrame(np.cov(frame, rowvar=False, ddof=1), index=frame.columns, columns=frame.columns)
+    book = construct_families.hierarchical_risk_parity(matrix, cap=1.0)
+
+    def cluster_variance(block):
+        block = np.asarray(block)
+        sub = np.cov(block, rowvar=False, ddof=1)
+        inverse = 1.0 / np.diag(sub)
+        return float((inverse / inverse.sum()) @ sub @ (inverse / inverse.sum()))
+
+    quiet_variance, loud_variance = cluster_variance(quiet), cluster_variance(loud)
+    expected_quiet = loud_variance / (quiet_variance + loud_variance)
+    assert float(book[["q0", "q1"]].sum()) == pytest.approx(expected_quiet, abs=1e-9)
+    assert float(book[["l0", "l1"]].sum()) == pytest.approx(1.0 - expected_quiet, abs=1e-9)
+    assert float(book.min()) > 0.0
+
+
+def test_the_tail_program_reproduces_the_shortfall_it_minimises():
+    """Expected shortfall is computed directly from the window's months, so the program has something
+    independent to be checked against: on a planted window the direct computation is a hand value, and
+    the optimiser's book cannot have a worse tail than any other feasible book."""
+    months = pd.period_range("2000-01", periods=100, freq="M")
+    one = pd.DataFrame({"a": np.concatenate([[-0.20], np.full(99, 0.01)])}, index=months)
+    assert construct_families.expected_shortfall(np.ones(1), one, level=0.05) == pytest.approx(0.032, abs=1e-12)
+
+    window = pd.DataFrame(
+        {"a": np.concatenate([[-0.20], np.full(99, 0.005)]), "b": np.full(100, 0.005)},
+        index=months,
+    )
+    matrix = pd.DataFrame(np.cov(window.to_numpy(), rowvar=False, ddof=1), index=["a", "b"], columns=["a", "b"])
+    book = construct_families.mean_cvar(matrix, None, window, cap=1.0)
+    assert float(book["b"]) == pytest.approx(1.0, abs=1e-6), "the tail is in one sleeve, so the programme leaves it"
+    chosen = construct_families.expected_shortfall(book.to_numpy(), window.to_numpy(), level=0.05)
+    draws = np.random.default_rng(1).dirichlet(np.ones(2), size=200)
+    tails = [construct_families.expected_shortfall(candidate, window.to_numpy(), level=0.05) for candidate in draws]
+    assert chosen <= min(tails) + 1e-12
+    assert chosen < construct_families.expected_shortfall(np.full(2, 0.5), window.to_numpy(), level=0.05)
+
+
+def test_the_no_mean_form_is_decided_by_the_constraint_set():
+    """With a zero mean and the tightest norm a fully invested long-only book admits, the feasible set
+    is a single point, so the equal-weight portfolio arrives without the mean entering anywhere. That
+    is the family's no-mean cell, and it is a statement about the constraint set rather than about
+    means."""
+    rng = np.random.default_rng(10)
+    names = list(universe.TICKERS)
+    frame = pd.DataFrame(rng.normal(0, 0.02, (80, len(names))), columns=names)
+    matrix = pd.DataFrame(np.cov(frame, rowvar=False, ddof=1), index=names, columns=names)
+    budget = 1.0 / len(names) ** 0.5
+    book = construct_families.mean_variance(matrix, np.zeros(len(names)), frame, norm=budget)
+    assert book.to_numpy() == pytest.approx(np.full(len(names), 1.0 / len(names)), abs=1e-6)
+    with pytest.raises(ValueError, match="admits no fully invested book"):
+        construct_families.mean_variance(matrix, np.zeros(len(names)), frame, norm=0.1)
+
+
+def test_black_litterman_reproduces_the_posterior_form_and_its_two_limits():
+    """The module writes the posterior in its precision form; the test computes the covariance form,
+    which is the algebraically equivalent expression, so the equivalence is verified on numbers. The
+    two limits are the method's own claims: infinite view uncertainty returns the prior, and zero
+    uncertainty reproduces the view exactly."""
+    matrix = np.array([[0.04, 0.01], [0.01, 0.09]])
+    prior = np.array([0.02, 0.03])
+    views = np.array([[1.0, -1.0]])
+    view_returns = np.array([0.01])
+    tau = 0.05
+    for view_variance in (0.0004, 0.01, 0.005):
+        view_covariance = np.array([[view_variance]])
+        written = construct_means.posterior(matrix, prior, tau, views, view_returns, view_covariance)
+        # pi + tau*Sigma*P' (P tau Sigma P' + Omega)^-1 (q - P pi), the same posterior in another form
+        scaled = tau * matrix
+        expected = prior + scaled @ views.T @ np.linalg.inv(views @ scaled @ views.T + view_covariance) @ (
+            view_returns - views @ prior
+        )
+        assert written == pytest.approx(expected.ravel(), abs=1e-10)
+
+    assert construct_means.posterior(matrix, prior, tau, views, view_returns, np.array([[1e12]])) == pytest.approx(prior, abs=1e-8)
+    tight = construct_means.posterior(matrix, prior, tau, views, view_returns, np.array([[1e-14]]))
+    assert (views @ tight).item() == pytest.approx(0.01, abs=1e-6)
+
+
+def test_the_shrunk_mean_is_pulled_toward_the_target_and_has_a_smaller_error():
+    """The estimator's own claim, planted: the sample mean of a window carries noise, the Bayes-Stein
+    mean pulls it toward the mean the minimum-variance portfolio implies, and the pull leaves it
+    closer to the truth. The intensity is returned rather than applied and forgotten, because it is
+    estimated from the window and a small value is a statement about the window."""
+    rng = np.random.default_rng(11)
+    names = list(universe.TICKERS)
+    truth = np.full(len(names), 0.004)
+    window = pd.DataFrame(rng.normal(truth, 0.03, (60, len(names))), columns=names)
+    matrix = pd.DataFrame(np.cov(window, rowvar=False, ddof=1), index=names, columns=names)
+    vector, report = construct_means.jorion(window, matrix)
+    plain = window.mean()
+    assert 0.0 < report["intensity"] < 1.0
+    assert float(((vector - truth) ** 2).sum()) < float(((plain - truth) ** 2).sum())
+    assert float(vector.sub(report["target"]).abs().sum()) < float(plain.sub(report["target"]).abs().sum())
+    assert float(vector.sub(plain).abs().sum()) == pytest.approx(
+        report["intensity"] * float(plain.sub(report["target"]).abs().sum()), rel=1e-9
+    )
+
+
+def test_the_grid_is_pre_registered_at_twenty_runs_before_any_of_them_runs():
+    """The count is the design's, not the table's: sixteen distinct cells, two perturbation runs and
+    two repeats of the secondary protocol. A cell added later is an amendment to the registry, and a
+    duplicated identifier is two runs' manifests keyed to one name."""
+    declared = registry.validate()
+    assert declared["pre_registered"] == 20
+    assert (declared["cells"], declared["perturbed"], declared["repeated"]) == (16, 2, 2)
+    assert len(set(declared["runs"])) == len(declared["runs"])
+    stages = {run["stage"] for run in registry.RUNS}
+    assert stages == {"A", "B", "C"}, "every stage of the design carries at least one run"

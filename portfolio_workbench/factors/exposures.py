@@ -82,6 +82,20 @@ def windows(months, window=WINDOW):
         yield months[position], months[position - window : position]
 
 
+def expanding_windows(months, window=WINDOW):
+    """The same traded months, with every month since the panel opened in the estimate.
+
+    The secondary protocol: the estimate for month t uses the months from the panel's first month
+    through t-1, so the window grows rather than rolling, and the traded months are exactly the ones
+    the rolling rule trades. The boundary is unchanged - an estimate formed at the close of t-1 still
+    cannot read t's own bar - so a difference between the two protocols is a difference in window
+    length rather than in the out-of-sample span.
+    """
+    months = pd.PeriodIndex(months, freq="M").sort_values()
+    for position in range(window, len(months)):
+        yield months[position], months[:position]
+
+
 def _require_observations(block, window_months):
     """Refuse a window with a hole in it, in the only place a hole is legitimate.
 
