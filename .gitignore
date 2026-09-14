@@ -4,6 +4,16 @@
 # The frozen market-data snapshot: retrieved once, local, never redistributed.
 .data/
 
+# Data containers, ignored by extension rather than by path. Every CSV, archive, workbook or columnar
+# file in this tree is either the snapshot or a derivative of it, and the licence posture forbids
+# shipping either; the accident this prevents is a fetch or an export landing beside the code under a
+# name no path rule listed. The snapshot fetch and the workbook export are the two that will happen.
+*.csv
+*.zip
+*.xlsx
+*.xls
+*.parquet
+
 # Credentials and local overrides.
 .env
 .env.*
@@ -11,3 +21,13 @@
 # Python bytecode caches.
 __pycache__/
 *.pyc
+
+# Tool caches and local environments. Nothing here is a build input, and each is regenerable, so a
+# checkout that carries one would only be a checkout whose diff nobody can read.
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+*.egg-info/
