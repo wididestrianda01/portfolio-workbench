@@ -59,6 +59,16 @@ COST_SENSITIVITY_BP = (5.0, 20.0, 40.0)
 # Accumulation tolerance for the projection: the constraint set is arithmetic, so the tolerance is
 # for floating-point accumulation rather than for a modelling approximation.
 PROJECTION_TOLERANCE = 1e-12
+# The bound beyond which a finished projection is a failure rather than a rounding: it is looser than
+# the iteration tolerance on purpose, because the loop stops after one sweep per sleeve and the vector
+# it leaves is feasible to within accumulation. A vector outside this is not the constraint set's
+# answer at any tolerance, and reading it as one would put an infeasible book into the weight path.
+FEASIBILITY_TOLERANCE = 1e-9
+# Reading a weight as sitting at the cap. The projected answer reaches the cap to within
+# floating-point accumulation, never exactly, so a report that tested equality would print the cap
+# as unbound on every step of a capped cell. It lives here rather than at the report because the
+# number is a property of the constraint set, which is what CAP declares.
+CAP_TOLERANCE = 1e-9
 
 
 def bounded_simplex(weights, cap=CAP):
@@ -99,7 +109,7 @@ def bounded_simplex(weights, cap=CAP):
             held = out > 0
             out[held] += deficit * (out[held] / out[held].sum())
         out = np.clip(out, 0.0, cap)
-    if abs(out.sum() - 1.0) > 1e-9:
+    if abs(out.sum() - 1.0) > FEASIBILITY_TOLERANCE:
         raise ValueError(
             f"the projection ended at {out.sum():.12f} rather than one; the vector cannot be made "
             f"feasible under a cap of {cap:.4f}"
