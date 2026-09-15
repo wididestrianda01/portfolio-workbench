@@ -30,6 +30,7 @@ as a pass.
 import numpy as np
 import pandas as pd
 
+from ..construct import constraints
 from ..evaluate import metrics, statistics
 from . import grid as grid_module
 from . import registry
@@ -81,7 +82,7 @@ def cell_ids():
     return tuple(spec["id"] for spec in registry.CELLS)
 
 
-def verdict(row, bar, adjusted):
+def verdict(row):
     """The ladder the design fixed, applied to one row.
 
     The first rung **is** the haircut: the multiple-testing bar and the paired bar are the same test on
@@ -92,9 +93,10 @@ def verdict(row, bar, adjusted):
     detected and not a candidate, and its advantage is measured after the decided cost rather than
     before it, because the primary metric is net.
 
-    The bar that decides is the declared conservative one. The correlation-adjusted bar is not a second
-    chance: a cell that clears only the lower bar is still reported as no difference detected, and the
-    row's own statistic is printed beside both so a reader can weigh it.
+    The bar that decides is the declared conservative one, and it is the one the row's haircut record
+    holds. The correlation-adjusted bar is not a second chance: a cell that clears only the lower bar is
+    still reported as no difference detected, and the row's own statistic is printed beside both so a
+    reader can weigh it.
     """
     if row["cell"] == "policy":
         return IS_BENCHMARK
@@ -120,6 +122,32 @@ def verdict(row, bar, adjusted):
     if not row["expanding_sign"]:
         return SIGN_LOST
     return CANDIDATE
+
+
+def claimed(row):
+    """The four ingredients a recommendation claim is made of, carried on the row itself.
+
+    The design writes bar 3 as *bar 2 plus the haircut plus constraint-binding frequency plus a
+    positive cost-adjusted advantage at the decided rate*, so the claim is recorded with all four
+    rather than left as a verdict word: the statistic against the bar it cleared, the advantage the
+    net series measures after the decided cost, and how often the per-sleeve cap was actually binding
+    on the book. The last of those is the one a reader cannot reconstruct from the rest - a cell whose
+    book is mostly the bound is a result about the constraint set, and the perturbations exist to show
+    it - so a claim that did not travel with it would be silent about the ingredient most likely to
+    withdraw it. Rows that are not claims carry None rather than zeroes.
+    """
+    if row["verdict"] != CANDIDATE:
+        return None
+    return {
+        "statistic": row["paired_benchmark"]["statistic"],
+        "bar": row["haircut"]["bar"],
+        "information_ratio_net": row["information_ratio"],
+        "cost_bp": constraints.COST_BP,
+        "cap_binding_frequency": row["cap_binding_frequency"],
+        "cap_binding_steps": row["cap_binding_steps"],
+        "steps": row["months"],
+        "statement": row["haircut"]["statement"],
+    }
 
 
 def rows(grid, benchmark):
@@ -165,7 +193,8 @@ def rows(grid, benchmark):
                 by_id[identifier]["information_ratio"], by_id[child]["information_ratio"]
             )
     for row in sheet:
-        row["verdict"] = verdict(row, bar, adjusted)
+        row["verdict"] = verdict(row)
+        row["claim"] = claimed(row)
     return {
         "rows": sheet,
         "bar": bar,
@@ -234,7 +263,8 @@ def reproduces(left, right, tolerance=statistics.RERUN_TOLERANCE):
 
 
 def report(sheet, document):
-    """The table, the bars, the correlation between cells, the sub-periods and the negative results."""
+    """The table, the bars, the recommendation claims with the ingredients bar 3 names, the correlation
+    between cells, the sub-periods and the negative results."""
     print(
         f"[table] snapshot {document['snapshot_id']}: {len(sheet['rows'])} pre-registered runs, "
         f"{len(sheet['cells'])} distinct cells, {sheet['retention']['draws']} bootstrap resamples under seed "
@@ -284,10 +314,34 @@ def report(sheet, document):
         f"{sheet['retention']['retention']:.1%} of resamples against a floor of {sheet['retention']['floor']:.0%}; "
         f"ret is each cell's own share of resamples in which its advantage keeps its sign"
     )
+    _print_claims(sheet)
     _print_correlation(sheet)
     _print_diagnostics(sheet)
     _print_sub_periods(sheet)
     return sheet
+
+
+def _print_claims(sheet):
+    """The recommendation claims, each printed with the ingredients the design requires beside it.
+
+    Bar 3 is bar 2 plus the haircut plus the constraint-binding frequency plus a positive
+    cost-adjusted advantage at the decided rate, so a claim is printed with the statistic it cleared
+    the bar with, the advantage its net series measured, and how often the cap was binding on the book
+    it actually held. The statement that the bar is self-imposed travels in the row's claim record;
+    printing it beside every claim would repeat one sentence as if it were a finding.
+    """
+    claims = [row for row in sheet["rows"] if row["claim"]]
+    if not claims:
+        print("[table] no row cleared every rung, so no recommendation is claimed on this run")
+        return
+    for row in claims:
+        claim = row["claim"]
+        print(
+            f"[table] recommendation claim {row['cell']}: z {claim['statistic']:+.2f} against the declared "
+            f"bar {claim['bar']:.4f}, information ratio {claim['information_ratio_net']:+.3f} net of the "
+            f"{claim['cost_bp']:.0f} bp decision, per-sleeve cap binding on {claim['cap_binding_steps']} of "
+            f"{claim['steps']} steps"
+        )
 
 
 def _print_correlation(sheet):

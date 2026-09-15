@@ -117,8 +117,7 @@ def run_cell(spec, returns, months, cache=None):
     family = families.FAMILIES[spec["family"]]
     mean_input = means.MEANS[spec["mean"]] if spec["mean"] is not None else None
     records = walkforward.steps(months, spec["protocol"])
-    index, targets, books, gross, net, turnover = [], [], [], [], [], []
-    cap_binding, turnover_binding, movements, estimator_intensities, counts = [], [], [], [], []
+    path, estimator_intensities, counts = [], [], []
     mean_reports, sensitivity = [], {}
 
     for position, step in enumerate(records):
@@ -153,36 +152,49 @@ def run_cell(spec, returns, months, cache=None):
 
         if position == 0:
             book = target.copy()
-            traded_turnover, binding, step_cost = 0.0, False, 0.0
+            traded_turnover, binding, step_cost, movement = 0.0, False, 0.0, None
             establishment = constraints.establishment(target)
         else:
-            rebalance = constraints.rebalance(target, books[-1], limit=spec["cap"])
+            rebalance = constraints.rebalance(target, path[-1]["book"], limit=spec["cap"])
             book = rebalance["weights"]
             traded_turnover, binding = rebalance["turnover"], rebalance["binding"]
             step_cost = constraints.cost(traded_turnover)
-            movements.append(float((target - targets[-1]).abs().sum() / 2.0))
+            movement = float((target - path[-1]["target"]).abs().sum() / 2.0)
 
         realised = float(book @ returns.loc[traded])
-        index.append(traded)
-        targets.append(target)
-        books.append(book)
-        turnover.append(traded_turnover)
-        cap_binding.append(int((book > spec["cap"] - constraints.CAP_TOLERANCE).sum()))
-        turnover_binding.append(binding)
         # The book earns its market return and the trade is paid for out of it, so the cost is
         # charged to the net series and the gross series is the book's own return. Adding it to the
         # gross instead credits every cell with its own turnover, and the cost-adjusted series the
         # acceptance bar reads then pays nothing at all - on this panel a cell's annual cost is the
         # same order as the differences the comparison exists to detect.
-        gross.append(realised)
-        net.append(realised - step_cost)
+        #
+        # One step's own numbers in one record: a set of lists appended in step order cannot be told
+        # apart once one of them is appended twice, and every path below is read against the others by
+        # position. The funded step carries no movement, which is what separates the cells' rebalances
+        # from their one establishment trade.
+        path.append(
+            {
+                "traded": traded,
+                "target": target,
+                "book": book,
+                "turnover": traded_turnover,
+                "cap_binding": int((book > spec["cap"] - constraints.CAP_TOLERANCE).sum()),
+                "turnover_binding": binding,
+                "movement": movement,
+                "gross": realised,
+                "net": realised - step_cost,
+            }
+        )
 
-    index = pd.PeriodIndex(index, freq="M")
-    weights = pd.DataFrame(books, index=index)
-    target_path = pd.DataFrame(targets, index=index)
-    gross_series = pd.Series(gross, index=index, name=spec["id"])
-    net_series = pd.Series(net, index=index, name=spec["id"])
-    turnover_series = pd.Series(turnover, index=index)
+    index = pd.PeriodIndex([step["traded"] for step in path], freq="M")
+    weights = pd.DataFrame([step["book"] for step in path], index=index)
+    target_path = pd.DataFrame([step["target"] for step in path], index=index)
+    gross_series = pd.Series([step["gross"] for step in path], index=index, name=spec["id"])
+    net_series = pd.Series([step["net"] for step in path], index=index, name=spec["id"])
+    turnover_series = pd.Series([step["turnover"] for step in path], index=index)
+    movements = [step["movement"] for step in path if step["movement"] is not None]
+    cap_binding = [step["cap_binding"] for step in path]
+    turnover_binding = [step["turnover_binding"] for step in path]
     intensity_values = [report["intensity"] for report in mean_reports if "intensity" in report]
     mean_intensity_path = (
         pd.Series(intensity_values, index=index[-len(intensity_values):], name="mean_intensity")
@@ -220,7 +232,7 @@ def run_cell(spec, returns, months, cache=None):
         "volatility_annualised": float(net_series.std(ddof=1) * np.sqrt(12)),
         "estimator_intensity": float(np.mean(estimator_intensities)) if estimator_intensities else None,
         "components": sorted(set(counts)) if counts else None,
-        "mean_intensity": float(np.mean([report["intensity"] for report in mean_reports if "intensity" in report])) if any("intensity" in report for report in mean_reports) else None,
+        "mean_intensity": float(np.mean(intensity_values)) if intensity_values else None,
         "sensitivity": {setting: float(np.mean(values)) for setting, values in sensitivity.items()},
     }
     return {
@@ -228,7 +240,7 @@ def run_cell(spec, returns, months, cache=None):
         "spec": spec,
         "traded": index,
         "weights": weights,
-        "targets": pd.DataFrame(targets, index=index),
+        "targets": target_path,
         "turnover": turnover_series,
         "gross": gross_series,
         "net": net_series,
@@ -407,14 +419,15 @@ def report(grid, document):
         f"precedes the month it trades ({walks[0]['first_traded']}..{walks[0]['last_traded']}), "
         f"{walks[0]['gate']}, and each window carries one component count"
     )
-    # The perturbation is read beside the cell it perturbs rather than found further down a table: the
-    # question it answers is what the cap was doing, and that is a comparison of two rows.
-    for identifier in registry.PERTURBATION_PAIRS:
+    # The cap is read beside the cell it binds rather than found further down a table: the question it
+    # answers is what the bound was doing, and that is a comparison of two rows - the two perturbation
+    # pairs, and the two ERC cells the design asks to be read against each other.
+    for identifier, uncapped_id in (*registry.PERTURBATION_PAIRS.items(), *registry.BOUNDS_PAIRS.items()):
         base = next((result for result in grid["results"] if result["id"] == identifier), None)
-        lifted = next((result for result in grid["results"] if result["id"] == registry.PERTURBATION_PAIRS[identifier]), None)
+        lifted = next((result for result in grid["results"] if result["id"] == uncapped_id), None)
         if base is None or lifted is None:
             continue
-        print(f"[construct] perturbation {identifier} against its uncapped run: turnover "
+        print(f"[construct] the cap's effect, {identifier} against its uncapped pair: turnover "
               f"{base['summary']['turnover_annualised']:.2%} -> {lifted['summary']['turnover_annualised']:.2%}, "
               f"effective sleeve count {base['summary']['concentration']:.2f} -> {lifted['summary']['concentration']:.2f}, "
               f"largest weight {base['summary']['max_single_weight']:.3f} -> {lifted['summary']['max_single_weight']:.3f}, "

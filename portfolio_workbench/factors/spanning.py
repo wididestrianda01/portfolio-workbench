@@ -177,7 +177,10 @@ def main(root=None):
     named = spine_module.named_set(document["factors"]["eur"], spine_module.constructed_block(returns))
 
     rule = component_module.decompose(returns)
-    for count in sorted({rule["components"], component_module.PREREGISTERED_K}):
+    # The counts the loop runs. The family size below is this loop's own, and both directions are tested
+    # at each count, so a count added to the run cannot leave the reported family behind.
+    counts = sorted({rule["components"], component_module.PREREGISTERED_K})
+    for count in counts:
         run = directions(returns, named, count)
         label = "the count the rule retains" if count == rule["components"] else "the pre-registered count"
         headline, reverse = run["headline"], run["reverse"]
@@ -198,12 +201,10 @@ def main(root=None):
         print(f"    rows-sum-to-one half, reverse direction: {reverse_rows.min():+.2f}..{reverse_rows.max():+.2f}, "
               f"reported as computed - the test assets there are the named factors themselves, and the "
               f"zero-cost spread series among them are not the fully invested case the condition is stated for")
-    verdicts = 2
-    sensitivity = 2 * verdicts
-    print(f"[factor] the verdict family is {verdicts} joint tests - {rule['components']} test assets in one "
-          f"direction and {len(named.columns)} in the other - so Bonferroni at 5% needs p < {0.05 / verdicts:.4f}. "
-          f"Repeating both at the pre-registered count is a sensitivity run, and the four together need "
-          f"p < {0.05 / sensitivity:.4f}")
+    verdicts = 2 * len(counts)
+    print(f"[factor] the verdict family is {verdicts} joint tests over {len(counts)} count(s), the named set "
+          f"against the components and back - {rule['components']} test assets in one direction and "
+          f"{len(named.columns)} in the other - so Bonferroni at 5% needs p < {0.05 / verdicts:.4f}")
 
     premium = premiums(named)
     clearing = [name for name, stats in premium.items() if abs(stats["t"]) >= PREMIUM_BARS["time_series"]]

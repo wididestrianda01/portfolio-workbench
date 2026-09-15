@@ -174,6 +174,9 @@ def rank_retention(frame, benchmark, draws=BOOTSTRAP_DRAWS, seed=SEED):
     drawn = values[index]
     spread = drawn.std(axis=1, ddof=1)
     spread[spread == 0.0] = np.nan
+    # One vectorised pass over every resample and every cell, rather than `metrics.information_ratio`
+    # called per cell per draw: the annualisation is that function's, applied to the drawn matrix at
+    # once, and the shared month index above is what keeps the cells correlated through it.
     ratios = drawn.mean(axis=1) / spread * np.sqrt(metrics.PERIODS_PER_YEAR)
     full = np.asarray(active.mean() / active.std(ddof=1) * np.sqrt(metrics.PERIODS_PER_YEAR), dtype=float)
     leader = int(np.nanargmax(full))

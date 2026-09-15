@@ -117,6 +117,12 @@ PERTURBED = (
     _cell("maximum_diversification_uncapped", "A", "maximum_diversification", "sample", cap=UNCAPPED),
 )
 
+# The pair that differs only in the per-sleeve cap and is not a perturbation run: both ERC cells are
+# cells of the grid in their own right, and the design asks for the effect of the bounds to be reported
+# beside them rather than left to be read off two rows. Declared in the same form as the perturbation
+# so that one check covers both: a pair may move the cap and nothing else.
+BOUNDS_PAIRS = {"erc_bounded": "erc_unbounded"}
+
 # The secondary protocol, on the two cells the mandate's question turns on.
 REPEATED = (
     _cell("mean_variance_shrunk_expanding", "A", "mean_variance", "sample", mean="jorion", protocol="expanding"),
@@ -158,18 +164,18 @@ def validate():
     if PRE_REGISTERED != 20:
         raise ValueError(f"the pre-registered count is {PRE_REGISTERED}, not the twenty the design fixed")
     by_id = {run["id"]: run for run in RUNS}
-    for base_id, lifted_id in PERTURBATION_PAIRS.items():
-        base, lifted = by_id[base_id], by_id.get(lifted_id)
-        if lifted is None:
-            raise ValueError(f"the perturbation pair names a run the grid does not declare: {lifted_id}")
+    for base_id, lifted_id in (*PERTURBATION_PAIRS.items(), *BOUNDS_PAIRS.items()):
+        base, lifted = by_id.get(base_id), by_id.get(lifted_id)
+        if base is None or lifted is None:
+            raise ValueError(f"the pair {base_id}/{lifted_id} names a run the grid does not declare")
         moved = {
             key: (base[key], lifted[key])
             for key in base
             if key not in ("id", "cap") and base[key] != lifted[key]
         }
-        if moved or lifted["cap"] != UNCAPPED:
+        if moved or lifted["cap"] != UNCAPPED or base["cap"] == UNCAPPED:
             raise ValueError(
-                f"{lifted_id} is meant to lift the per-sleeve cap and change nothing else; it moves {moved} "
-                f"and its cap is {lifted['cap']}"
+                f"{lifted_id} is meant to be the uncapped half of a pair that changes nothing else; it moves "
+                f"{moved}, its cap is {lifted['cap']} and its pair's is {base['cap']}"
             )
     return {"runs": identifiers, "cells": len(CELLS), "perturbed": len(PERTURBED), "repeated": len(REPEATED), "pre_registered": PRE_REGISTERED}

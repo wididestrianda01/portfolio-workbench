@@ -227,6 +227,12 @@ def test_the_band_bounds_drift_and_the_trade_is_scaled_to_the_turnover_cap():
     assert list(rebalance["weights"].index) == list("abc")
 
     assert constraints.cost(0.05, bp=10.0) == pytest.approx(0.0001, abs=1e-15)
+    # A path arrives as a labelled series, and the one definition has to hand it back labelled: the
+    # sensitivity run reads the charge against the months it was traded in.
+    path = pd.Series([0.05, 0.02], index=pd.period_range("2020-01", periods=2, freq="M"))
+    charged = constraints.cost(path, bp=10.0)
+    assert list(charged.index) == list(path.index)
+    assert float(charged.iloc[0]) == pytest.approx(0.0001, abs=1e-15)
     assert constraints.establishment(pd.Series([0.5, 0.5], index=list("ab")))["cost"] == pytest.approx(0.001, abs=1e-15)
 
 
@@ -439,6 +445,10 @@ def test_the_grid_is_pre_registered_at_twenty_runs_before_any_of_them_runs():
     assert len(set(declared["runs"])) == len(declared["runs"])
     stages = {run["stage"] for run in registry.RUNS}
     assert stages == {"A", "B", "C"}, "every stage of the design carries at least one run"
+    # The pair read beside each other to report what the bounds do, and its uncapped half: both have to
+    # be cells of the grid rather than runs the report goes looking for.
+    assert set(registry.BOUNDS_PAIRS) <= {spec["id"] for spec in registry.CELLS}
+    assert set(registry.BOUNDS_PAIRS.values()) <= {spec["id"] for spec in registry.CELLS}
 
 
 # --------------------------------------------------------------- the evaluation harness
@@ -583,3 +593,29 @@ def test_a_rerun_agrees_within_the_stated_tolerance_and_a_moved_number_does_not(
     verdict = comparison.reproduces(table, moved)
     assert verdict["agrees"] is False and verdict["at"] == "a.information_ratio"
     assert verdict["tolerance"] == statistics.RERUN_TOLERANCE
+
+
+def test_a_recommendation_claim_carries_the_bar_three_ingredients():
+    """The fourth acceptance bar is bar 2 plus the haircut plus the constraint-binding frequency plus a
+    positive cost-adjusted advantage, so a row that clears every rung records the claim with all four
+    rather than leaving it as a verdict word. The binding frequency is the ingredient a reader cannot
+    reconstruct from the rest: a book that is mostly the cap is a result about the constraint set, and
+    the perturbations exist to show it. A row that is not a claim carries nothing rather than zeroes."""
+    row = {
+        "cell": "minimum_variance",
+        "verdict": comparison.CANDIDATE,
+        "paired_benchmark": {"statistic": 2.9},
+        "haircut": {"bar": 2.7344, "statement": "self-imposed from the literature"},
+        "information_ratio": 0.42,
+        "cap_binding_frequency": 3.21,
+        "cap_binding_steps": 131,
+        "months": 131,
+    }
+    claim = comparison.claimed(row)
+    assert claim["statistic"] == 2.9 and claim["bar"] == 2.7344
+    assert claim["information_ratio_net"] == 0.42 and claim["cost_bp"] == constraints.COST_BP
+    assert claim["cap_binding_frequency"] == 3.21 and claim["cap_binding_steps"] == 131
+    assert claim["steps"] == 131 and "self-imposed" in claim["statement"]
+
+    assert comparison.claimed({**row, "verdict": comparison.BEHIND}) is None
+    assert comparison.claimed({**row, "verdict": comparison.NO_DIFFERENCE}) is None

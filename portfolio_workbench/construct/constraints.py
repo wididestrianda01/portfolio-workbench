@@ -179,9 +179,15 @@ def cost(turnover, bp=COST_BP):
     """The cost of a rebalance, in return units, from its one-way turnover.
 
     `2 x one-way turnover x the per-side rate`: the rate is charged on traded notional, and one-way
-    turnover is half of it.
+    turnover is half of it. The one definition of that convention, read by the runner step by step and
+    by the metric block along a whole path; the multiple is not written out a second time anywhere,
+    because the second copy is what a sensitivity run at another rate would let drift from this one.
+    A labelled series comes back labelled, so a caller's path keeps its months.
     """
-    return 2.0 * float(turnover) * float(bp) / 1e4
+    rate = 2.0 * float(bp) / 1e4
+    if isinstance(turnover, (pd.Series, np.ndarray)):
+        return turnover * rate
+    return float(turnover) * rate
 
 
 def rebalance(target, current, band=BAND, cap=TURNOVER_CAP, limit=CAP):

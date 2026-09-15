@@ -99,9 +99,9 @@ def sensitivity(gross, turnover, benchmark, bps=constraints.COST_SENSITIVITY_BP)
     turnover = pd.Series(turnover, dtype=float).reindex(gross.index)
     report = {}
     for rate in bps:
-        charged = gross - 2.0 * turnover * float(rate) / 1e4
+        charged = gross - constraints.cost(turnover, bp=rate)
         report[float(rate)] = {
-            "cost_annualised": float(turnover.mean() * 2.0 * float(rate) / 1e4 * PERIODS_PER_YEAR),
+            "cost_annualised": float(constraints.cost(turnover.mean(), bp=rate) * PERIODS_PER_YEAR),
             "net_cumulative": float((1.0 + charged).prod() - 1.0),
             "information_ratio": information_ratio(active(charged, benchmark)),
         }
