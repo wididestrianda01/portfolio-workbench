@@ -208,7 +208,8 @@ def assert_no_look_ahead(records, months):
 
 
 def main(root=None):
-    """The engine's own report: the record of one protocol, and the boundary checked on it."""
+    """The engine's own report: both protocols re-cut on the frozen snapshot, every step of the rolling
+    one printed, and the boundary checked on each."""
     document = loader.load_panel(root)
     returns = panel.eur_excess_returns(
         document["prices"], document["fx"], document["risk_free"]["monthly"]

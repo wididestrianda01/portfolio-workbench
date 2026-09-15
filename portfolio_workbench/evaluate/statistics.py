@@ -1,0 +1,229 @@
+"""The noise floor: the paired test, the bootstrap, and the bars a difference has to clear.
+
+**Every comparison is a paired test on the difference of two monthly return series.** A single
+strategy's annualised information ratio carries a standard error near 0.30 over the 131 months this
+panel affords, so two cells compared by their separate ratios are indistinguishable by construction -
+every method sits inside every other's interval. Pairing is what buys resolution, and it buys it only
+because the cells are highly correlated: same universe, same months, long-only books that mostly
+agree. The realised correlation is therefore measured and reported rather than assumed, because the
+resolution quoted beside every verdict is a function of it.
+
+**The resolution is quoted in the metric's own units.** The paired standard error of the annualised
+information-ratio difference is `sqrt(12/T) * sqrt(2 * (1 - rho))` under the null, which is 0.098 at a
+correlation of 0.95 and 131 months - the figure the design's own power calculation arrived at. The
+smallest difference that clears the bar at eighty percent power is `2.8016 * that`, or 0.27, which is
+why a cell reported as **no difference detected** prints 0.27 beside it rather than nothing.
+
+**The bar is the family-wise one, and the correlation-adjusted bar is printed beside it.** Across
+sixteen cells the declared bar on the null statistic is the Bonferroni-equivalent `Phi^-1(1 - 0.05/16)`
+= 2.7344, which is also the 95th percentile of the maximum of sixteen independent standard normals -
+the directional reading, since the table asks whether a cell's advantage is positive.
+The cells are positively correlated, so the effective number of tests is smaller and the honest bar
+would be lower; both numbers are printed, and the conservative one decides. The haircut is
+**self-imposed from the literature** - it sits in the same territory as the threshold that reading
+arrived at once search is accounted for - and nothing regulatory requires it. Saying so is the point:
+a self-imposed bar presented as a requirement would borrow an authority it does not have.
+
+**A difference is reported only when all three legs pass.** The paired bar, a leader that keeps its
+rank in at least eighty percent of bootstrap resamples, and a sign that survives the expanding-window
+protocol. Anything failing a leg is published as **no difference detected**, with the resolution limit
+beside it - which the design expects to be the verdict for several prominent methods, and which is a
+finding rather than a failure.
+"""
+
+import math
+
+import numpy as np
+import pandas as pd
+from scipy.stats import norm
+
+from ..factors import components
+from . import metrics
+
+# The level the family-wise bar is declared at, stated once.
+ALPHA = 0.05
+# The two-sided 5% critical value plus the eighty-percent power quantile: the multiplier that turns a
+# standard error into the smallest difference a test of this size would detect at that power.
+POWER = float(norm.ppf(1.0 - ALPHA / 2.0) + norm.ppf(0.80))
+# The resample count and the retention floor the design fixed before any cell ran.
+BOOTSTRAP_DRAWS = 2000
+RANK_RETENTION_FLOOR = 0.80
+# The one documented seed, read from the module that owns every draw in the package, so a bootstrap
+# and a permutation null are reproducible from the same number.
+SEED = components.SEED
+# The tolerance a rerun is held to. Solvers differ in their last decimal, so bit-equality is not the
+# bar and pretending otherwise would be a false acceptance criterion; the seed makes the draws
+# reproducible, which is the part that can be exact.
+RERUN_TOLERANCE = 1e-6
+
+
+def family_wise_bar(tests, alpha=ALPHA):
+    """The bar a null statistic must clear when `tests` hypotheses are tested at once.
+
+    Bonferroni-equivalent, and equal to the 95th percentile of the maximum of `tests` independent
+    standard normals under the one-sided reading - the two are the same number to within a thousandth
+    at this count, which is why one value serves both readings. The one-sided reading is the one a
+    directional claim uses: the table asks whether a cell's advantage is positive, not whether its
+    statistic is extreme in either direction.
+    """
+    if tests < 1:
+        raise ValueError(f"{tests} tests have no family-wise bar")
+    return float(norm.ppf(1.0 - alpha / tests))
+
+
+def correlation_matrix(frame):
+    """The realised correlation of the cells' monthly return series, published rather than assumed."""
+    values = np.asarray(frame, dtype=float)
+    if values.shape[1] < 2:
+        raise ValueError("a pairwise correlation needs at least two cells")
+    return pd.DataFrame(np.corrcoef(values, rowvar=False), index=frame.columns, columns=frame.columns)
+
+
+def effective_tests(correlation):
+    """Nyholt's effective number of independent tests, read off the realised correlation matrix.
+
+    Sixteen cells evaluated on the same months are not sixteen independent tests, and the eigenvalue
+    spread of their correlation matrix says how many they effectively are. This is the number behind
+    the lower bar the design asks to be printed beside the conservative one - never instead of it.
+    """
+    matrix = np.asarray(correlation, dtype=float)
+    eigenvalues = np.linalg.eigvalsh(matrix)
+    count = len(eigenvalues)
+    if count < 2:
+        return 1.0
+    return float(max(1.0, 1.0 + (count - 1.0) * (1.0 - float(eigenvalues.var()) / count)))
+
+
+def adjusted_bar(correlation, alpha=ALPHA):
+    """The bar the realised correlation implies, which is lower than the declared one and is reported
+    beside it: the declared bar stays the one that decides.
+
+    The effective count is rounded to a whole number of tests, because that is what the bar's own
+    arithmetic admits - and the estimate is an estimate: a fully degenerate matrix comes out just under
+    two rather than at one, which is the estimator's slack rather than a second test.
+    """
+    return family_wise_bar(max(int(round(effective_tests(correlation))), 1), alpha=alpha)
+
+
+def paired(reference, alternative, benchmark, periods=metrics.PERIODS_PER_YEAR):
+    """One paired comparison: the difference of two annualised information ratios, the standard error
+    the realised correlation gives it, and the resolution that follows.
+
+    `reference` and `alternative` are the two monthly return series against the same benchmark, so the
+    comparison of a cell against the benchmark passes the benchmark's own series as the alternative -
+    its active series is identically zero and its ratio is zero by construction rather than undefined.
+    Two series that are perfectly correlated leave no variance for the standard error, and the answer
+    is then decided by whether the two books are the same book: the difference of their ratios is
+    reported as zero when they are, and as unbounded when a perfectly correlated pair still differs.
+    """
+    left = pd.Series(reference, dtype=float)
+    right = pd.Series(alternative, dtype=float).reindex(left.index)
+    if right.isna().any():
+        raise ValueError("the two series being paired do not cover the same months")
+    months = int(len(left))
+    if months < 3:
+        raise ValueError("a paired test needs at least three months")
+    rolling = float(np.corrcoef(left, right)[0, 1])
+    ratio = metrics.information_ratio(metrics.active(left, benchmark), periods) - metrics.information_ratio(
+        metrics.active(right, benchmark), periods
+    )
+    error = float(np.sqrt(periods / months) * np.sqrt(2.0 * (1.0 - rolling)))
+    # A correlation that reaches one to within floating-point accumulation leaves a standard error that
+    # is zero in every sense a reader would accept, and dividing by it would report an unbounded
+    # statistic from a rounding error rather than from a result.
+    if error <= RERUN_TOLERANCE:
+        statistic = 0.0 if abs(ratio) <= RERUN_TOLERANCE else math.copysign(math.inf, ratio)
+    else:
+        statistic = ratio / error
+    return {
+        "months": months,
+        "correlation": rolling,
+        "difference": ratio,
+        "standard_error": error,
+        "statistic": statistic,
+        # The smallest difference this test would have detected at eighty percent power, printed
+        # beside any verdict that reports no difference. The statistic is reported in the units the
+        # bar is declared in rather than as a p-value: the bar is a z, and a second scale for the
+        # same number is a place for the two to disagree.
+        "resolution": float(POWER * error),
+        "degenerate": bool(error <= RERUN_TOLERANCE),
+    }
+
+
+def rank_retention(frame, benchmark, draws=BOOTSTRAP_DRAWS, seed=SEED):
+    """How often the full-sample leader stays leader when the months are resampled, and what each cell's
+    own advantage does under the same resampling.
+
+    One resampled month index is drawn per resample and shared by every cell, so the correlation
+    between cells survives the resampling: drawing each cell's months independently would break the
+    very structure that makes the comparison paired and would report a leader stability nobody
+    measured. Two statistics come out of it. The design's headline is the **rank retention** of the
+    leader - the share of resamples in which the cell that led the full sample leads the resample. The
+    per-cell statistic is the share of resamples in which that cell's information ratio **keeps the
+    sign** of its full-sample one, which is the same question asked of the claim the cell's own row
+    makes: a row is a statement about one cell against the benchmark, and an advantage that flips sign
+    when the months are resampled has not been measured.
+    """
+    active = pd.DataFrame(frame, dtype=float).sub(pd.Series(benchmark, dtype=float), axis=0)
+    values = active.to_numpy()
+    months, cells = values.shape
+    if draws < 1:
+        raise ValueError("a bootstrap needs at least one resample")
+    generator = np.random.default_rng(seed)
+    index = generator.integers(0, months, size=(draws, months))
+    drawn = values[index]
+    spread = drawn.std(axis=1, ddof=1)
+    spread[spread == 0.0] = np.nan
+    ratios = drawn.mean(axis=1) / spread * np.sqrt(metrics.PERIODS_PER_YEAR)
+    full = np.asarray(active.mean() / active.std(ddof=1) * np.sqrt(metrics.PERIODS_PER_YEAR), dtype=float)
+    leader = int(np.nanargmax(full))
+    drawn_leader = np.nanargmax(np.where(np.isnan(ratios), -np.inf, ratios), axis=1)
+    order = np.argsort(np.where(np.isnan(ratios), np.inf, -ratios), axis=1)
+    ranks = np.empty_like(order)
+    np.put_along_axis(ranks, order, np.arange(cells)[None, :].repeat(draws, axis=0), axis=1)
+    keeps = np.sign(ratios) == np.sign(full)[None, :]
+    return {
+        "draws": int(draws),
+        "seed": int(seed),
+        "leader": str(frame.columns[leader]),
+        "retention": float((drawn_leader == leader).mean()),
+        "floor": RANK_RETENTION_FLOOR,
+        "cells": {
+            str(name): {
+                "share_leader": float((drawn_leader == position).mean()),
+                "median_rank": float(np.median(ranks[:, position]) + 1.0),
+                "retention": float(keeps[:, position].mean()),
+                "information_ratio": float(full[position]),
+            }
+            for position, name in enumerate(frame.columns)
+        },
+    }
+
+
+def haircut(statistic, bar):
+    """The multiple-testing haircut applied: whether the statistic clears the declared family-wise bar.
+
+    The statement travels with the verdict because the bar is the project's own and not a rule anyone
+    imposed on it: a self-imposed threshold reported as a requirement would borrow an authority the
+    reading does not give it.
+    """
+    return {
+        "bar": float(bar),
+        "clears": bool(abs(float(statistic)) >= float(bar)),
+        "statement": (
+            "self-imposed from the literature, not a regulatory requirement: nothing located imposes a "
+            "multiple-testing correction on portfolio research"
+        ),
+    }
+
+
+def sign_holds(rolling_ratio, expanding_ratio):
+    """Whether the advantage keeps its sign under the secondary protocol.
+
+    The expanding run trades the same months with a longer estimate, so a sign that flips with the
+    window length was a property of the window rather than of the method.
+    """
+    left, right = float(rolling_ratio), float(expanding_ratio)
+    if abs(left) <= RERUN_TOLERANCE or abs(right) <= RERUN_TOLERANCE:
+        return False
+    return (left > 0.0) == (right > 0.0)

@@ -8,12 +8,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from portfolio_workbench.compare import registry
+from portfolio_workbench.compare import registry, table as comparison
 from portfolio_workbench.construct import constraints
 from portfolio_workbench.construct import families as construct_families
 from portfolio_workbench.construct import means as construct_means
 from portfolio_workbench.data import universe
 from portfolio_workbench.factors import components as cp
+from portfolio_workbench.evaluate import metrics, statistics
 from portfolio_workbench.factors import exposures, spanning, spine
 from portfolio_workbench.risk import covariance
 
@@ -438,3 +439,147 @@ def test_the_grid_is_pre_registered_at_twenty_runs_before_any_of_them_runs():
     assert len(set(declared["runs"])) == len(declared["runs"])
     stages = {run["stage"] for run in registry.RUNS}
     assert stages == {"A", "B", "C"}, "every stage of the design carries at least one run"
+
+
+# --------------------------------------------------------------- the evaluation harness
+
+
+def planted_pair(periods=131, rho=0.95, seed=11):
+    """Two monthly series at a planted correlation, on the out-of-sample calendar, with a zero
+    benchmark so the active series is the series itself."""
+    rng = np.random.default_rng(seed)
+    index = pd.period_range("2015-09", periods=periods, freq="M")
+    one = rng.normal(0, 0.03, periods)
+    two = rho * one + np.sqrt(1.0 - rho ** 2) * rng.normal(0, 0.03, periods)
+    flat = pd.Series(np.zeros(periods), index=index)
+    return pd.Series(one, index=index), pd.Series(two, index=index), flat
+
+
+def test_the_paired_test_reproduces_the_power_calculations_own_resolution():
+    """The design's numbers, re-derived from the paired statistic: the standard error of the annualised
+    information-ratio difference is `sqrt(12/T) * sqrt(2(1-rho))` on the realised correlation, which is
+    0.098 at a correlation of 0.95 over 131 months, and the smallest difference this test detects at
+    eighty percent power is 0.27 - the figure the reporting rule prints beside every verdict that finds
+    no difference."""
+    one, two, flat = planted_pair()
+    result = statistics.paired(two, one, flat)
+    realised = float(np.corrcoef(two, one)[0, 1])
+
+    assert result["correlation"] == pytest.approx(realised, abs=1e-12)
+    assert realised == pytest.approx(0.95, abs=0.03), "the plant has to land where the design's table is"
+    assert result["standard_error"] == pytest.approx(
+        np.sqrt(12 / len(one)) * np.sqrt(2 * (1 - realised)), abs=1e-12
+    )
+    assert result["standard_error"] == pytest.approx(0.098, rel=0.10)
+    assert result["statistic"] == pytest.approx(result["difference"] / result["standard_error"], abs=1e-12)
+    assert result["resolution"] == pytest.approx(statistics.POWER * result["standard_error"], abs=1e-12)
+    assert result["resolution"] == pytest.approx(0.27, rel=0.10)
+
+    identical = statistics.paired(one, one.copy(), flat)
+    assert identical["degenerate"] is True and identical["statistic"] == 0.0
+    assert statistics.sign_holds(-0.4, -0.7) is True and statistics.sign_holds(-0.4, 0.7) is False
+
+
+def test_the_family_wise_bar_is_the_maximum_of_sixteen_normals_and_the_adjusted_one_is_lower():
+    """The bar the design fixes: sixteen cells tested at once put the null statistic's threshold at
+    2.73, which is both the Bonferroni-equivalent value and the 95th percentile of the maximum of
+    sixteen independent standard normals. Positive correlation between the cells lowers the honest bar,
+    and both are reported rather than only the flattering one."""
+    bar = statistics.family_wise_bar(16)
+    rng = np.random.default_rng(20260912)
+    drawn = rng.standard_normal((200000, 16))
+    signed = float(np.percentile(drawn.max(axis=1), 95))
+    two_sided = float(np.percentile(np.abs(drawn).max(axis=1), 95))
+
+    assert bar == pytest.approx(2.7344, abs=1e-3)
+    assert signed == pytest.approx(bar, abs=0.05), "the directional reading is the one the table tests"
+    assert two_sided == pytest.approx(2.9552, abs=0.05), "the two-sided maximum is the Bonferroni value, a stricter bar"
+    assert statistics.family_wise_bar(1) == pytest.approx(1.6449, abs=1e-3)
+    assert statistics.family_wise_bar(20) > bar, "more cells cannot buy a weaker bar"
+
+    independent = np.eye(16)
+    assert statistics.effective_tests(independent) == pytest.approx(16, abs=1e-9)
+    correlated = 0.9 * np.ones((16, 16)) + 0.1 * np.eye(16)
+    assert 1.0 < statistics.effective_tests(correlated) < 16.0, "correlated cells are not sixteen tests"
+    assert 1.0 <= statistics.effective_tests(np.ones((16, 16))) < 2.0, (
+        "a fully degenerate matrix is one test to within the estimator's own slack"
+    )
+    assert statistics.adjusted_bar(correlated) < bar, "the flattering bar is lower, which is why both print"
+    assert statistics.adjusted_bar(np.eye(16)) == pytest.approx(bar, abs=1e-3)
+
+
+def test_the_haircut_is_stated_as_self_imposed_and_the_retention_separates_a_leader_from_noise():
+    """The two challenge diagnostics. The haircut is the family-wise bar, and the statement that it is
+    self-imposed travels with it, because a self-imposed threshold reported as a requirement would
+    borrow an authority the reading does not give it. The bootstrap resamples the months once and
+    shares the draw across the cells, so a planted advantage keeps its rank and a panel of noise does
+    not."""
+    haircut = statistics.haircut(2.8, statistics.family_wise_bar(16))
+    assert haircut["clears"] is True
+    assert statistics.haircut(2.0, statistics.family_wise_bar(16))["clears"] is False
+    assert "self-imposed" in haircut["statement"] and "not a regulatory requirement" in haircut["statement"]
+
+    rng = np.random.default_rng(5)
+    index = pd.period_range("2015-09", periods=131, freq="M")
+    benchmark = pd.Series(rng.normal(0.002, 0.02, len(index)), index=index)
+    noise = pd.DataFrame(
+        {f"n{position}": benchmark + rng.normal(0, 0.01, len(index)) for position in range(6)}, index=index
+    )
+    noise["strong"] = benchmark + 0.006 + rng.normal(0, 0.002, len(index))
+    measured = statistics.rank_retention(noise, benchmark, draws=400)
+    assert measured["leader"] == "strong"
+    assert measured["retention"] >= statistics.RANK_RETENTION_FLOOR
+    assert measured["cells"]["strong"]["retention"] >= statistics.RANK_RETENTION_FLOOR
+    assert measured["seed"] == cp.SEED, "the one documented seed is the one the draws come from"
+
+    coin_flip = statistics.rank_retention(noise.drop(columns=["strong"]), benchmark, draws=400)
+    assert coin_flip["retention"] < statistics.RANK_RETENTION_FLOOR, "noise cannot retain a ranking"
+    rerun = statistics.rank_retention(noise, benchmark, draws=400)
+    assert rerun["retention"] == measured["retention"], "the same seed reproduces the same resamples"
+
+
+def test_the_metric_block_is_the_arithmetic_it_claims():
+    """The primary metric, the drawdown, the cost sensitivity and the declared sub-periods, on inputs
+    whose answers are known: the information ratio is the mean over the deviation annualised by the
+    square root of twelve, the cost is charged on traded notional at the per-side rate, and the four
+    sub-periods partition the out-of-sample window exactly."""
+    index = pd.period_range("2015-09", periods=131, freq="M")
+    values = pd.Series(np.sin(np.arange(131)), index=index) / 100.0
+    assert metrics.information_ratio(values) == pytest.approx(values.mean() / values.std(ddof=1) * np.sqrt(12), abs=1e-12)
+    assert metrics.information_ratio(pd.Series(np.zeros(131), index=index)) == 0.0
+    assert metrics.drawdown(pd.Series([0.10, -0.20, 0.05])) == pytest.approx(-0.20, abs=1e-12)
+    assert metrics.tracking_error(values) == pytest.approx(values.std(ddof=1) * np.sqrt(12), abs=1e-12)
+
+    gross = pd.Series(np.linspace(-0.01, 0.02, 131), index=index)
+    turnover = pd.Series(np.linspace(0.0, 0.04, 131), index=index)
+    report = metrics.sensitivity(gross, turnover, pd.Series(np.zeros(131), index=index), bps=(5.0, 40.0))
+    for rate in (5.0, 40.0):
+        charged = gross - 2.0 * turnover * rate / 1e4
+        assert report[rate]["net_cumulative"] == pytest.approx(float((1 + charged).prod() - 1), abs=1e-12)
+        assert report[rate]["cost_annualised"] == pytest.approx(
+            float(turnover.mean() * 2.0 * rate / 1e4 * 12), abs=1e-12
+        )
+    assert report[40.0]["cost_annualised"] > report[5.0]["cost_annualised"]
+
+    windows = metrics.sub_periods(values)
+    assert sum(entry["months"] for entry in windows.values()) == 131
+    assert [entry["months"] for entry in windows.values()] == [52, 24, 24, 31]
+    outside = metrics.sub_periods(pd.Series(np.ones(12), index=pd.period_range("1990-01", periods=12, freq="M")))
+    assert all(entry["months"] == 0 and entry["information_ratio"] is None for entry in outside.values())
+
+
+def test_a_rerun_agrees_within_the_stated_tolerance_and_a_moved_number_does_not():
+    """A rerun is held to a stated tolerance rather than to bit-equality, because solvers differ in
+    their last decimal and pretending otherwise would be a false acceptance criterion. The check has to
+    fire on a number that moved for a reason and to pass on floating-point noise."""
+    table = {
+        "a": {"information_ratio": 0.544, "net_cumulative": 1.3339},
+        "bar": {"family_wise": 2.7344, "adjusted": 2.3263},
+    }
+    assert comparison.reproduces(table, table)["agrees"] is True
+    tiny = {"a": {"information_ratio": 0.544 + 1e-9, "net_cumulative": 1.3339}, "bar": table["bar"]}
+    assert comparison.reproduces(table, tiny)["agrees"] is True
+    moved = {"a": {"information_ratio": 0.5441, "net_cumulative": 1.3339}, "bar": table["bar"]}
+    verdict = comparison.reproduces(table, moved)
+    assert verdict["agrees"] is False and verdict["at"] == "a.information_ratio"
+    assert verdict["tolerance"] == statistics.RERUN_TOLERANCE
