@@ -222,7 +222,6 @@ def run_cell(spec, returns, months, cache=None):
         "components": sorted(set(counts)) if counts else None,
         "mean_intensity": float(np.mean([report["intensity"] for report in mean_reports if "intensity" in report])) if any("intensity" in report for report in mean_reports) else None,
         "sensitivity": {setting: float(np.mean(values)) for setting, values in sensitivity.items()},
-        "max_single_weight": float(weights.to_numpy().max()),
     }
     return {
         "id": spec["id"],
