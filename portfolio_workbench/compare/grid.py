@@ -47,6 +47,7 @@ import pandas as pd
 
 from ..construct import constraints, families, means
 from ..data import loader, panel, universe
+from ..evaluate import walkforward
 from ..factors import exposures
 from ..risk import covariance as covariance_module
 from . import registry
@@ -77,21 +78,6 @@ def _factor(block):
 ESTIMATORS = {"sample": _sample, "shrinkage": _shrinkage, "factor": _factor}
 
 
-def protocol_windows(months, kind="rolling"):
-    """The months a run trades and the window it estimates from, per protocol.
-
-    The rolling protocol is the factor layer's own window rule, read from there so that the grid
-    cannot cut its windows differently from the exposures it feeds. The expanding protocol trades the
-    same months with a window that grows from the panel's first month, so the difference between the
-    two is the length of the estimate and nothing else.
-    """
-    if kind == "expanding":
-        return exposures.expanding_windows(months, window=exposures.WINDOW)
-    if kind == "rolling":
-        return exposures.windows(months, window=exposures.WINDOW)
-    raise ValueError(f"the grid does not run a protocol called {kind!r}")
-
-
 def window_covariance(name, block, cache=None, key=None):
     """One window's covariance from the declared estimator, cached by window where a cache is given.
 
@@ -115,9 +101,14 @@ def policy_weights(columns):
 
 
 def benchmark(returns, months):
-    """The policy portfolio at its fixed weights through the out-of-sample months, costless."""
+    """The policy portfolio at its fixed weights through the out-of-sample months, costless.
+
+    The traded months come from the engine rather than from a second cut of the calendar, so the
+    benchmark is measured on exactly the months the cells trade; a benchmark on a different month set
+    would make every active series a comparison of two calendars.
+    """
     weights = policy_weights(returns.columns)
-    traded = [month for month, _ in exposures.windows(pd.PeriodIndex(months, freq="M"), exposures.WINDOW)]
+    traded = [step["traded"] for step in walkforward.steps(months)]
     return pd.Series([float(weights @ returns.loc[month]) for month in traded], index=pd.PeriodIndex(traded, freq="M"), name="policy")
 
 
@@ -125,14 +116,18 @@ def run_cell(spec, returns, months, cache=None):
     """One declared run: its weight path, its return series, its diagnostics and its establishment line."""
     family = families.FAMILIES[spec["family"]]
     mean_input = means.MEANS[spec["mean"]] if spec["mean"] is not None else None
+    records = walkforward.steps(months, spec["protocol"])
     index, targets, books, gross, net, turnover = [], [], [], [], [], []
     cap_binding, turnover_binding, movements, estimator_intensities, counts = [], [], [], [], []
     mean_reports, sensitivity = [], {}
 
-    for position, (traded, window_months) in enumerate(protocol_windows(months, spec["protocol"])):
-        block = exposures.window_block(returns, window_months)
-        key = (spec["estimator"], spec["protocol"], str(window_months[0]), str(window_months[-1]))
+    for position, step in enumerate(records):
+        block = walkforward.block(returns, step)
+        step["observations"] = len(block)
+        traded = step["traded"]
+        key = (spec["estimator"], spec["protocol"], str(step["window_start"]), str(step["window_end"]))
         matrix, covariance_report = window_covariance(spec["estimator"], block, cache=cache, key=key)
+        step["components"] = covariance_report.get("components")
         if covariance_report.get("intensity") is not None:
             estimator_intensities.append(covariance_report["intensity"])
         if covariance_report.get("components") is not None:
@@ -194,6 +189,11 @@ def run_cell(spec, returns, months, cache=None):
         if intensity_values
         else None
     )
+    # The run's boundary, checked on the record once the path is built: every window's last month
+    # precedes the month it trades, and the count beside each step is the one the step's own window
+    # decided. The check is here rather than inside the loop so that a run is validated as a whole -
+    # a boundary broken at one step is a statement about the run, not about that step.
+    walk = walkforward.assert_no_look_ahead(records, months)
     summary = {
         "steps": len(index),
         "measured_rebalances": len(movements),
@@ -235,6 +235,8 @@ def run_cell(spec, returns, months, cache=None):
         "mean_intensity": mean_intensity_path,
         "cap_binding": pd.Series(cap_binding, index=index),
         "turnover_binding": pd.Series(turnover_binding, index=index),
+        "walk": walkforward.frame(records),
+        "walk_report": walk,
         "summary": summary,
     }
 
@@ -301,6 +303,13 @@ def manifest(result, document):
             "mean_variance_tradeoff": families.MEAN_VARIANCE_TRADEOFF,
             "black_litterman": black_litterman_convention(spec),
             "seed": components_seed(),
+        },
+        "walk_forward": {
+            "windows": result["walk_report"]["windows"],
+            "sleeve_months_read": result["walk_report"]["observations"],
+            "components_per_window": result["walk_report"]["components"],
+            "gate": result["walk_report"]["gate"],
+            "checked": "no window reaches the month it trades, and one window carries one component count",
         },
         "summary": {key: value for key, value in summary.items() if key != "establishment"},
         "establishment": summary["establishment"],
@@ -389,6 +398,15 @@ def report(grid, document):
             print(f"[construct]     {result['id']}: " + "; ".join(details))
     for cut in grid["cuts"]:
         print(f"[construct] {cut['id']:<34s} cut after {len(grid.get('results', []))} runs: {cut['reason']}")
+    # The engine's own verdict, printed once for the whole grid rather than per run: the boundary is a
+    # property of the protocol every cell runs under, and a per-run line would repeat one sentence
+    # twenty times while saying nothing about the cell.
+    walks = [result["walk_report"] for result in grid["results"]]
+    print(
+        f"[construct] the walk-forward boundary held on all {len(walks)} runs: every window's last month "
+        f"precedes the month it trades ({walks[0]['first_traded']}..{walks[0]['last_traded']}), "
+        f"{walks[0]['gate']}, and each window carries one component count"
+    )
     # The perturbation is read beside the cell it perturbs rather than found further down a table: the
     # question it answers is what the cap was doing, and that is a comparison of two rows.
     for identifier in registry.PERTURBATION_PAIRS:
@@ -425,6 +443,9 @@ def main(root=None, out=None, specs=None):
           f"{float((1 + policy).prod() - 1):+.2%}")
     written = write_manifests(document, grid["results"], root=out)
     print(f"[construct] {len(written)} run manifests written under {written[0].parent if written else None}")
+    from . import table
+
+    table.main(grid=grid, document=document)
     return grid
 
 

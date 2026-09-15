@@ -12,6 +12,18 @@ from . import external
 from .universe import FX_QUOTES, PANEL_START, TICKERS, WINDOW_END
 
 
+def available_from(months):
+    """The moment a month-labelled bar becomes readable: the first day of the month after it.
+
+    One definition for every reader of the rule. The as-of filter applies it to the rows
+    a snapshot carries and the walk-forward engine applies it to the months a window is
+    cut on, and the two have to agree on which bars a given moment exposes - a second copy
+    of this arithmetic would let the gate a reader is told about differ from the gate the
+    estimate was formed under.
+    """
+    return (pd.PeriodIndex(months, freq="M") + 1).to_timestamp(how="start")
+
+
 def add_availability(frame, date_col="date"):
     """Attach `period_month` and `available_from` to a dated frame.
 
@@ -22,7 +34,7 @@ def add_availability(frame, date_col="date"):
     out = frame.copy()
     months = pd.PeriodIndex(out[date_col], freq="M")
     out["period_month"] = months.to_timestamp(how="start")
-    out["available_from"] = (months + 1).to_timestamp(how="start")
+    out["available_from"] = available_from(months)
     return out
 
 

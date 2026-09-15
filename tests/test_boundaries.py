@@ -10,6 +10,8 @@ import pandas as pd
 import pytest
 
 from portfolio_workbench.compare import grid, registry
+from portfolio_workbench.data import panel
+from portfolio_workbench.evaluate import walkforward
 from portfolio_workbench.construct import constraints
 from portfolio_workbench.data import universe
 from portfolio_workbench.factors import components as cp
@@ -259,3 +261,71 @@ def test_the_estimation_error_diagnostics_are_read_off_the_target_path():
         assert target_count != pytest.approx(traded_count), (
             f"{identifier}: the two paths agree, so this plant cannot tell them apart"
         )
+
+
+# --------------------------------------------------------------- the walk-forward engine
+
+
+def test_the_engine_records_every_step_and_refuses_a_planted_look_ahead():
+    """The boundary is a record checked on the whole run rather than an intention held step by step,
+    so it can be shown to have teeth: a window that reaches the month it trades, a window that stops
+    short of the last bar that month could have read, a row missing anywhere but the panel's own front
+    bar, an availability that does not follow from the bar it names, and a window answering two
+    different component counts are each refused with the month named."""
+    records = walkforward.steps(CALENDAR)
+    for record in records:
+        record["observations"] = record["months"] - 1 if record["window_start"] == CALENDAR[0] else record["months"]
+    report = walkforward.assert_no_look_ahead(records, CALENDAR)
+    assert report["steps"] == len(CALENDAR) - exposures.WINDOW
+    assert report["first_traded"] == "2015-09" and report["last_traded"] == "2026-07"
+    assert all(record["available_from"] == panel.available_from(record["window"])[-1] for record in records)
+    assert all(record["gated_by"] == record["traded"] - 1 for record in records)
+
+    reaching = list(records)
+    reaching[3] = {**reaching[3], "window_end": reaching[3]["traded"]}
+    with pytest.raises(ValueError, match="inside its own estimation window"):
+        walkforward.assert_no_look_ahead(reaching, CALENDAR)
+
+    short = list(records)
+    short[3] = {**short[3], "window_end": short[3]["traded"] - 2}
+    with pytest.raises(ValueError, match="stops at"):
+        walkforward.assert_no_look_ahead(short, CALENDAR)
+
+    holed = list(records)
+    holed[3] = {**holed[3], "observations": holed[3]["months"] - 1}
+    with pytest.raises(ValueError, match="starts at"):
+        walkforward.assert_no_look_ahead(holed, CALENDAR)
+
+    misgated = list(records)
+    misgated[3] = {**misgated[3], "available_from": misgated[3]["available_from"] - pd.Timedelta(days=1)}
+    with pytest.raises(ValueError, match="became readable"):
+        walkforward.assert_no_look_ahead(misgated, CALENDAR)
+
+    for record in records:
+        record["components"] = 2
+    assert walkforward.assert_no_look_ahead(records, CALENDAR)["components"] == [2]
+
+
+def test_the_engine_refuses_a_window_that_reaches_its_own_month_as_it_hands_the_rows_out():
+    """The cheap half of the check runs before an optimiser is called: a mis-cut step cannot first
+    produce a plausible book and be caught afterwards. The window's rows are cut by the factor layer's
+    own rule, so an estimate reads exactly what the exposures read for the same month - the panel's
+    first bar excepted, which carries no return."""
+    rolls = list(exposures.windows(CALENDAR))
+    returns, factors = planted()
+    frame = pd.DataFrame(np.asarray(returns), index=CALENDAR[: len(returns)], columns=returns.columns)
+    step = {
+        "traded": rolls[0][0],
+        "window": rolls[0][1],
+        "window_start": rolls[0][1][0],
+        "window_end": rolls[0][1][-1],
+    }
+    assert len(walkforward.block(frame, step)) == exposures.WINDOW
+    assert len(walkforward.block(frame.iloc[1:], step)) == exposures.MIN_OBS, "the front bar carries no return"
+    with pytest.raises(ValueError, match="below the"):
+        walkforward.block(frame.iloc[2:], step)
+
+    broken = {**step, "window": pd.period_range(step["window_start"], step["traded"], freq="M"),
+              "window_end": step["traded"]}
+    with pytest.raises(ValueError, match=str(step["traded"])):
+        walkforward.block(frame, broken)
