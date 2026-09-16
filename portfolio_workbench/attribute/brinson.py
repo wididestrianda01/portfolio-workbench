@@ -65,7 +65,7 @@ SELECTION_ABSENT = (
 
 # The cost convention in one sentence, quoted by the report rather than rebuilt from the module that
 # applies it.
-COST_CONVENTION = "the per-side rate on traded notional; the benchmark is costless by convention"
+COST_CONVENTION = "the benchmark is costless by convention, and the cost is never merged into selection"
 
 # Where a quotient stops being computable rather than meaningful: Cariño's scaling factor tends to
 # 1/(1+R_b) as a period's active return goes to zero, and Menchero's period adjustment tends to zero as
@@ -353,8 +353,8 @@ def report(cells, document, count=6):
     print(f"[attrib] {BRINSON_FACHLER}, arithmetic; {CARINO} reported, {MENCHERO} as the cross-check")
     print(f"[attrib] allocation is measured on LOCAL-currency returns, so selection here is absent by "
           f"structure - {cells[0]['selection_absent']}")
-    print(f"[attrib] cost: {constraints.COST_BP:.0f} bp per side on traded notional - twice the one-way "
-          f"turnover - charged to the net series; {COST_CONVENTION}")
+    print(f"[attrib] cost: {constraints.COST_BP:.0f} bp per side on traded notional, which is twice the one-way "
+          f"turnover, charged to the net series; {COST_CONVENTION}")
     print(f"[attrib] {'cell':<34s}{'allocation':>11s}{'currency':>10s}{'interaction':>12s}"
           f"{'gross excess':>13s}{'residual':>11s}{'carino-menchero':>17s}")
     for cell in cells:
