@@ -329,6 +329,16 @@ OVERRIDES = {
             "the check that the two statements of the contract agree, which is what makes the query a "
             "statement of the interface rather than a second implementation of the panel"
         ),
+        "returns": (
+            "the assembly of the monthly euro excess return table of this effort, stated as one query: "
+            "the price and currency legs as month-on-month ratios, the currency translation as "
+            "`(1 + r) / (1 + fx) - 1` rather than a sum, the overnight rate compounded within the month "
+            "at /360 on the month's own calendar days, and every leg under the same availability gate"
+        ),
+        "returns_agreement": (
+            "the check that the query's table and the pandas path's agree cell by cell, which is what "
+            "lets the statement stand as the contract's definition rather than as a paraphrase"
+        ),
     },
     "data/quality.py": {
         "stop_dividend_blind": (

@@ -1007,13 +1007,14 @@ print(f"run manifests are written under the snapshot's own directory, {grid.DEFA
     },
     {
         "slug": "14-data-sql",
-        "title": "The data contract as a query: the as-of rule and coverage in SQL",
+        "title": "The data contract and the panel's own table, as queries",
         "entry": "portfolio_workbench.data.sql",
         "drives": ("data/sql.py",),
         "does": (
-            "The panel is read by pandas, and the contract it satisfies is also stated as SQL: the as-of "
-            "join and the coverage report as queries over the snapshot's own files. The entry point runs "
-            "both statements and prints whether they agree, which they are asserted to do on the frozen "
+            "The panel is read by pandas, and the same work is stated as SQL over the snapshot's own "
+            "files: the as-of join, the coverage report, and the assembly of the monthly euro excess "
+            "return table the factor model is fitted on. The entry point runs all three and prints "
+            "whether each agrees with the pandas path, which they are asserted to do on the frozen "
             "snapshot."
         ),
         "contract": (
@@ -1022,7 +1023,11 @@ print(f"run manifests are written under the snapshot's own directory, {grid.DEFA
             "on the first day of the next. The priced legs are read as one long table by union, the gate "
             "is `available_from <= the moment the reader stands at`, and the coverage query reports the "
             "months carried beside the months visible at that moment. The pandas path stays the authority "
-            "the analytics run on; the query is checked against it."
+            "the analytics run on; the query is checked against it. The third statement is the table "
+            "itself rather than its columns: the price and currency legs reduced to month-on-month "
+            "ratios, the currency translation as `(1 + r) / (1 + fx) - 1` rather than a sum, the "
+            "overnight rate compounded within the month at /360 on the month's own calendar days, and "
+            "every leg under the same gate and window."
         ),
         "example_note": (
             "The rule's arithmetic is the thing worth checking twice, so the worked example states it in "
@@ -1055,7 +1060,11 @@ print("the gate is available_from <= the moment read, and nothing else")
             "second can be read by someone who does not read Python and can be pointed at another "
             "project's loader. What the query does not carry is any of the quality gate: the eight stops "
             "and four warnings live in the pandas path, and a reader who took the query as the contract "
-            "would satisfy the shape of the table without the checks on its content."
+            "would satisfy the shape of the table without the checks on its content. The assembly's "
+            "agreement is a tolerance rather than an identity, because the two paths compound a "
+            "month's rate in a different order: on the frozen snapshot the largest month-instrument "
+            "difference is zero, and the stated tolerance is what another snapshot's rerun would be "
+            "read against."
         ),
         "not_establish": (
             "Nothing here establishes that the snapshot is usable, which is the quality gate's work and "

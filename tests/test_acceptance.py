@@ -152,6 +152,10 @@ def test_the_sql_statement_of_the_contract_agrees_with_the_pandas_path():
     satisfy to consume this engine, and a contract written only as Python is one the sibling re-derives
     instead of satisfying. Two statements that disagree mean one of them is wrong about the panel every
     result is keyed to, so the disagreement is refused rather than noted.
+
+    The same holds for the table itself, not only for its columns: the monthly euro excess return frame
+    the factor model is fitted on is assembled in SQL from the snapshot's own files - currency
+    translation, cash accrual and gate included - and compared against the pandas path cell by cell.
     """
     document = loader.load_panel()
     con, _, views = sql.connection()
@@ -164,6 +168,11 @@ def test_the_sql_statement_of_the_contract_agrees_with_the_pandas_path():
     earlier = sql.coverage(con, views, when=document["months"].max().to_timestamp())
     assert earlier["months_visible"].sum() < at_snapshot["months_visible"].sum()
     assert earlier["months_visible"].sum() < earlier["months"].sum()
+
+    assembled = sql.returns_agreement(document, sql.returns(con, views, document))
+    assert assembled["agrees"], assembled["differences"]
+    assert (assembled["instruments"], assembled["months"]) == (11, 191)
+    assert assembled["worst"] <= sql.RETURN_TOLERANCE
 
 
 @pytest.fixture(scope="module")

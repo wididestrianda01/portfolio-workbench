@@ -100,8 +100,10 @@ ROWS = (
         "skill": "Python and SQL",
         "module": "portfolio_workbench.data.sql",
         "depth": APPLIED,
-        "exercised_by": "the package, plus the DuckDB statement of the table contract: the as-of join and "
-        "the coverage report as queries, asserted against the pandas path",
+        "exercised_by": "the package, plus the table contract and the panel's own table stated as "
+        "DuckDB SQL over the snapshot's files: the as-of join, the coverage report, and the assembly of "
+        "the monthly euro excess return frame - currency translation, /360 cash accrual, window and gate "
+        "- asserted against the pandas path cell by cell",
     },
     {
         "skill": "Excel",
