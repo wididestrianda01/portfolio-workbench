@@ -131,6 +131,33 @@ def window_block(frame, window_months):
     return block
 
 
+def orthogonal_transform(block):
+    """The window's own map from the block's declared series to the ones net of their predecessors.
+
+    A linear map on the block's columns, returned as a matrix rather than applied and discarded,
+    because the factor attribution has to put a month **outside** the window onto the basis the
+    window's coefficients were fitted in: the coefficients belong to the window, the month they are
+    applied to does not, and this map is the only object that carries the basis across that boundary.
+
+    Each series is projected onto the predecessors already transformed, so the map is accumulated in
+    the order the report names the block in and is unit upper-triangular over the declared series. The
+    series are not centred, so the map carries no intercept and a month travels through it as a row.
+    """
+    x = np.asarray(block, dtype=float)
+    gram = x.T @ x
+    size = x.shape[1]
+    transform = np.zeros((size, size))
+    for position in range(size):
+        basis = np.zeros(size)
+        basis[position] = 1.0
+        for earlier in range(position):
+            vector = transform[:, earlier]
+            coefficient = float(vector @ gram @ basis) / float(vector @ gram @ vector)
+            basis = basis - coefficient * vector
+        transform[:, position] = basis
+    return transform
+
+
 def orthogonalise(block):
     """The block re-expressed against itself, in its declared order, inside one window.
 
@@ -139,15 +166,8 @@ def orthogonalise(block):
     monthly factor return's mean belongs to the factor model, and centring would move the intercept,
     which would quietly turn the reported alpha from Jensen's into the sleeve's average return.
     """
-    columns = list(block.columns)
-    orthogonal = []
-    raw = [np.asarray(block[column], dtype=float) for column in columns]
-    for vector in raw:
-        residual = vector.copy()
-        for earlier in orthogonal:
-            residual = residual - (earlier @ vector) / (earlier @ earlier) * earlier
-        orthogonal.append(residual)
-    return pd.DataFrame(dict(zip(columns, orthogonal)), index=block.index)
+    values = np.asarray(block, dtype=float) @ orthogonal_transform(block)
+    return pd.DataFrame(values, index=block.index, columns=list(block.columns))
 
 
 def within_span(block, sleeve, tolerance=SPAN_TOLERANCE):

@@ -52,6 +52,12 @@ FX_QUOTES = {"EURUSD=X": "USD", "EURSEK=X": "SEK"}
 
 TICKERS = list(SLEEVES)
 
+# Ticker to group, derived from the two maps above rather than restated beside them. A weight vector is
+# indexed by ticker while the declared budget is keyed by group, so this is the only place the two are
+# joined; a second copy would be the one that drifted, and the budget would then aggregate a book it
+# was not declared against.
+INSTRUMENT_GROUP = {ticker: GROUP[sleeve] for ticker, (sleeve, _) in SLEEVES.items()}
+
 # The strategic policy weights, summing to one. They define the benchmark the whole
 # comparison is measured against, and they are fixed rather than optimised: a
 # benchmark that moved with the data would make every tracking error a moving target.

@@ -8,6 +8,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from portfolio_workbench.attribute import brinson
+from portfolio_workbench.attribute import factor as factor_attribution
+from portfolio_workbench.budget import euler
 from portfolio_workbench.compare import registry, table as comparison
 from portfolio_workbench.construct import constraints
 from portfolio_workbench.construct import families as construct_families
@@ -619,3 +622,228 @@ def test_a_recommendation_claim_carries_the_bar_three_ingredients():
 
     assert comparison.claimed({**row, "verdict": comparison.BEHIND}) is None
     assert comparison.claimed({**row, "verdict": comparison.NO_DIFFERENCE}) is None
+
+
+def test_the_brinson_identity_holds_and_only_the_allocation_level_differs_from_bhb():
+    """Two sleeves whose returns differ between the two books, because that is the only case in which
+    the selection and interaction terms exist at all. The identity is the claim: allocation plus
+    selection plus interaction is the active return exactly. Brinson-Hood-BeeBower is computed beside it
+    for the one difference it actually carries - its allocation is not measured net of the benchmark's
+    own return, so the two allocation columns differ by the weight deviation times that return while
+    their totals agree term by term."""
+    weights_p = pd.Series({"a": 0.50, "b": 0.30, "c": 0.20})
+    weights_b = pd.Series({"a": 0.40, "b": 0.35, "c": 0.25})
+    returns_p = pd.Series({"a": 0.020, "b": 0.050, "c": -0.010})
+    returns_b = pd.Series({"a": 0.010, "b": 0.040, "c": 0.000})
+
+    decomposition = brinson.single_period(weights_p, weights_b, returns_p, returns_b)
+    active = float(weights_p @ returns_p) - float(weights_b @ returns_b)
+    assert active == pytest.approx(0.005, abs=1e-15)
+    assert decomposition["active"] == pytest.approx(active, abs=1e-15)
+    assert sum(decomposition["totals"].values()) == pytest.approx(active, abs=1e-15)
+    assert decomposition["residual"] == pytest.approx(0.0, abs=1e-15)
+    assert decomposition["benchmark_total"] == pytest.approx(0.018, abs=1e-15)
+    assert decomposition["totals"]["allocation"] == pytest.approx(-0.001, abs=1e-15)
+    assert decomposition["totals"]["selection"] == pytest.approx(0.005, abs=1e-15)
+    assert decomposition["totals"]["interaction"] == pytest.approx(0.001, abs=1e-15)
+    assert decomposition["source"] == brinson.BRINSON_FACHLER
+
+    # The two published forms share one interaction term and one set of totals; the only column that
+    # moves is allocation, by exactly the weight deviation times the benchmark's own return.
+    shift = (weights_p - weights_b) * decomposition["benchmark_total"]
+    assert (decomposition["bhb_allocation"] - decomposition["allocation"]).to_numpy() == pytest.approx(
+        shift.to_numpy(), abs=1e-15
+    )
+    assert decomposition["bhb_total"] == pytest.approx(decomposition["active"], abs=1e-15)
+    assert float(decomposition["other"].sum()) == pytest.approx(decomposition["totals"]["interaction"])
+
+
+def test_the_currency_lines_sum_and_measuring_allocation_in_euro_would_double_count():
+    """One euro sleeve and one translating sleeve, with a stated move in the currency. The four lines
+    sum to the active return exactly, selection is absent by structure, and the reason the allocation
+    is measured in local currency is demonstrated rather than asserted: allocation taken on the euro
+    return is already the whole active return, so adding a currency line to it counts the translation
+    twice - which is invisible, because the lines still sum."""
+    months = pd.period_range("2020-01", periods=3, freq="M")
+    local = pd.DataFrame({"eur": [0.020, 0.010, -0.030], "sek": [0.050, -0.030, 0.010]}, index=months)
+    translation = pd.DataFrame(
+        {"eur": np.zeros(3), "sek": [0.040, -0.020, 0.030]}, index=months
+    )
+    split = {"local": local, "translation": translation, "euro": local + translation + local * translation}
+    book = pd.DataFrame({"eur": [0.60, 0.50, 0.40], "sek": [0.40, 0.50, 0.60]}, index=months)
+    benchmark = pd.Series({"eur": 0.50, "sek": 0.50})
+
+    block = brinson.allocation_only(book, benchmark, split)
+    deviation = book.sub(benchmark, axis=1)
+    assert block["selection"] == 0.0 and "same instrument" in block["selection_absent"]
+    for month in months:
+        lines = block["lines"].loc[month]
+        assert lines[list(brinson.LINES)].sum() == pytest.approx(lines["active"], abs=1e-15)
+        assert lines["residual"] == pytest.approx(0.0, abs=1e-15)
+        # The translation is carried by the currency line and its cross term, and by nothing else.
+        assert lines["currency"] == pytest.approx(
+            float((deviation.loc[month] * translation.loc[month]).sum()), abs=1e-15
+        )
+
+    # Allocation taken on the euro return is the whole active return already; adding the currency line
+    # to it then overstates the total by the translation the allocation has absorbed.
+    euro_allocation = (deviation * split["euro"]).sum(axis=1)
+    assert euro_allocation.to_numpy() == pytest.approx(block["lines"]["active"].to_numpy(), abs=1e-15)
+    double_counted = euro_allocation + block["lines"]["currency"]
+    assert abs(double_counted - block["lines"]["active"]).max() == pytest.approx(
+        abs(block["lines"]["currency"]).max(), abs=1e-15
+    )
+    assert abs(block["lines"]["currency"]).max() > 0.0
+
+
+def test_carino_reproduces_the_published_case_and_both_methods_land_on_the_compounded_excess():
+    """The published two-month example first - coefficients 0.976 and 1.015, whole-run 0.991, linked
+    allocation 0.80% - and then a self-consistent case, where the three lines do sum to the active
+    return in every period. There both methods land on the compounded difference of the two growth
+    rates rather than near it, which is the property the reconciliation rests on, and they land on it
+    while distributing it differently: their per-line readings differ by more than the residual."""
+    months = pd.period_range("2020-01", periods=2, freq="M")
+    portfolio = pd.Series([0.03, -0.01], index=months)
+    benchmark = pd.Series([0.02, -0.02], index=months)
+    effects = pd.DataFrame({"allocation": [0.005, 0.003]}, index=months)
+
+    published = brinson.carino(portfolio, benchmark, effects)
+    assert published["coefficients"].to_numpy() == pytest.approx([0.9756, 1.0152], abs=1e-4)
+    assert published["whole"] == pytest.approx(0.991, abs=1e-3)
+    assert float(published["linked"]["allocation"]) == pytest.approx(0.008, abs=1e-4)
+
+    lines = pd.DataFrame(
+        {"allocation": [0.006, 0.004], "currency": [0.002, 0.001], "interaction": [0.002, 0.005]},
+        index=months,
+    )
+    assert lines.sum(axis=1).to_numpy() == pytest.approx((portfolio - benchmark).to_numpy(), abs=1e-15)
+    linked = brinson.linking(portfolio, benchmark, lines)
+    assert linked["target"] == pytest.approx(
+        float((1 + portfolio).prod() - (1 + benchmark).prod()), abs=1e-15
+    )
+    assert linked["carino"]["total"] == pytest.approx(linked["target"], abs=1e-15)
+    assert linked["menchero"]["total"] == pytest.approx(linked["target"], abs=1e-15)
+    assert abs(linked["residual"]) <= linked["tolerance"] * abs(linked["target"])
+    assert linked["reconciles"] is True
+    assert linked["agreement"] > 100.0 * abs(linked["residual"])
+
+    # A book that reproduces the benchmark leaves a 0/0 in both formulae; both take their limit and
+    # return nothing rather than a NaN.
+    flat = pd.Series(np.zeros(3), index=pd.period_range("2020-01", periods=3, freq="M"))
+    zeros = pd.DataFrame({"allocation": np.zeros(3)}, index=flat.index)
+    assert brinson.carino(flat, flat, zeros)["total"] == 0.0
+    assert brinson.menchero(flat, flat, zeros)["total"] == 0.0
+
+
+def test_the_euler_contributions_sum_to_volatility_and_a_var_decomposition_does_not():
+    """Two assets and a covariance whose answer is known by hand: the contributions sum to the
+    volatility exactly, which is the condition the budget is read under. Then the failing case that
+    justifies refusing the other measure, on a window with one planted tail month: the conditional
+    contributions a VaR report prints sum to the expected shortfall and exceed the value at risk, so
+    reading them as VaR contributions overstates the quantity they decompose."""
+    covariance = pd.DataFrame([[0.04, 0.006], [0.006, 0.09]], index=["a", "b"], columns=["a", "b"])
+    weights = pd.Series({"a": 0.6, "b": 0.4})
+    sigma = float(np.sqrt(weights @ covariance @ weights))
+    table = euler.contributions(weights, covariance)
+    assert table["contribution"].sum() == pytest.approx(sigma, rel=1e-15)
+    assert table["share"].sum() == pytest.approx(1.0, rel=1e-15)
+    assert table["marginal"].to_numpy() == pytest.approx((covariance @ weights).to_numpy() / sigma, abs=1e-15)
+    assert euler.additivity(weights, covariance)["relative"] <= euler.ADDITIVITY_TOLERANCE
+    assert euler.additivity(weights, covariance)["reconciles"] is True
+
+    months = pd.period_range("2000-01", periods=20, freq="M")
+    window = np.zeros((20, 2))
+    window[0, 0] = -0.20
+    window[1:, 0] = 0.005
+    window[:, 1] = 0.005
+    tail = euler.tail_contributions(window, np.array([0.5, 0.5]), level=0.05)
+    assert tail["tail_months"] == 1
+    assert tail["sum"] == pytest.approx(tail["tail_mean"], abs=1e-15), "the contributions add to the tail mean"
+    refused = euler.var_refusal(window, np.array([0.5, 0.5]), level=0.05)
+    assert refused["contributions_sum"] == pytest.approx(refused["expected_shortfall"], abs=1e-15)
+    assert refused["contributions_sum"] > refused["value_at_risk"], "a VaR decomposition does not add up"
+    assert refused["overstatement"] == pytest.approx(
+        refused["expected_shortfall"] - refused["value_at_risk"], abs=1e-15
+    )
+    assert "not homogeneous" in refused["worse"] and "no VaR contribution" in refused["refused"]
+
+
+def test_the_factor_attribution_reconstructs_planted_returns_on_the_basis_it_fitted():
+    """Three sleeves whose returns are exactly six factors plus an alpha, and a factor frame carrying
+    the block's own column names, so no sleeve is the block's construction and every coefficient is
+    estimated. The decomposition then has to reproduce the planted returns: the coefficients were fitted
+    on the block net of its predecessors, the traded month is put on that basis by the window's own map,
+    and a residual that is not zero is the basis having been lost between the two."""
+    rng = np.random.default_rng(11)
+    months = pd.period_range("2005-01", periods=90, freq="M")
+    columns = ["Mkt-RF", "HML", *list(spine.CONSTRUCTED)]
+    factors = pd.DataFrame(rng.normal(0.001, 0.02, (90, len(columns))), index=months, columns=columns)
+    truth = {"s1": (0.001, [1.0, 0.2, 0.5, 0.3, -0.2, 0.1]), "s2": (-0.002, [0.3, -0.5, 1.0, 0.0, 0.4, 0.2]),
+             "s3": (0.0, [0.1, 0.9, -0.3, 0.6, 0.1, -0.4])}
+    returns = pd.DataFrame(
+        {sleeve: alpha + factors.to_numpy() @ np.asarray(beta) for sleeve, (alpha, beta) in truth.items()},
+        index=months,
+    )
+    fit = exposures.rolling(returns, factors, months)
+    assert fit["determined"][0] == [], "no sleeve here is the block's own construction"
+    assert len(fit["traded"]) == 90 - exposures.WINDOW
+
+    book = pd.DataFrame(
+        {"s1": 0.5, "s2": 0.3, "s3": 0.2}, index=fit["traded"]
+    )
+    composition = factor_attribution.decomposition(book, returns, fit, factors)
+    assert composition["residual"].abs().max() == pytest.approx(0.0, abs=1e-15)
+    assert composition["explained"].to_numpy() == pytest.approx(composition["active"].to_numpy(), abs=1e-15)
+    assert composition["total"].to_numpy() == pytest.approx(composition["active"].to_numpy(), abs=1e-15)
+    # The contribution of every factor is its exposure times its return, on the basis the fit used.
+    assert composition["factors"].to_numpy().sum() == pytest.approx(
+        float(composition["explained"].sum() - composition["alpha"].sum()), abs=1e-15
+    )
+
+    risk = factor_attribution.risk_attribution(book, fit, factors)
+    assert risk["total_tracking_error"] == pytest.approx(
+        np.sqrt(risk["variance"]["total"].mean() * metrics.PERIODS_PER_YEAR), abs=1e-15
+    )
+    assert risk["factor_share"] == pytest.approx(1.0, abs=1e-9), "a model with no residual noise is all factor"
+
+
+def test_the_cross_view_residual_is_zero_by_construction_and_fires_on_a_misaligned_view():
+    """Both views decompose the same active return, so their gap is zero and the check is a definition
+    rather than a tolerance. It is kept because it fires the moment one view reads a different month,
+    which is the failure a passing identity is supposed to rule out - and a view shifted by one month
+    has to fail it."""
+    index = pd.period_range("2020-01", periods=12, freq="M")
+    holding = pd.Series(np.linspace(-0.01, 0.02, 12), index=index)
+    view = factor_attribution.cross_view(holding, holding)
+    assert view["worst"] == 0.0 and view["reconciles"] is True
+    assert view["statement"].startswith("one residual per period")
+
+    shifted = holding.shift(1).fillna(0.0)
+    moved = factor_attribution.cross_view(holding, shifted)
+    assert moved["reconciles"] is False and moved["worst"] > 0.0
+    assert moved["relative"] > moved["tolerance"]
+
+    # A view that stops short of the other's months is refused rather than read as a zero residual for
+    # the missing ones.
+    with pytest.raises(ValueError):
+        factor_attribution.cross_view(holding, holding.iloc[:-1])
+
+
+def test_ex_ante_and_ex_post_tracking_error_are_the_two_objects_they_name():
+    """Two assets with round numbers: the ex-ante figure is the covariance form annualised, the ex-post
+    figure is the realised dispersion of the active series, and the difference between them is reported
+    as its own number rather than left to a reader to subtract. An active book with no tracking error
+    reports a ratio of nothing rather than a zero."""
+    covariance = pd.DataFrame([[0.04, 0.0], [0.0, 0.01]], index=["a", "b"], columns=["a", "b"])
+    active_weights = pd.Series({"a": 0.2, "b": -0.2})
+    ex_ante = euler.ex_ante_tracking_error(active_weights, covariance)
+    assert ex_ante == pytest.approx(np.sqrt(0.04 * 0.04 + 0.01 * 0.04) * np.sqrt(12), rel=1e-15)
+
+    index = pd.period_range("2020-01", periods=24, freq="M")
+    active = pd.Series(np.sin(np.arange(24)) / 100.0, index=index)
+    ex_post = euler.ex_post_tracking_error(active)
+    assert ex_post == metrics.tracking_error(active)
+    quality = euler.forecast_quality(ex_ante, ex_post)
+    assert quality["difference"] == pytest.approx(ex_post - ex_ante, abs=1e-15)
+    assert quality["ratio"] == pytest.approx(ex_post / ex_ante, rel=1e-12)
+    assert euler.forecast_quality(0.0, ex_post)["ratio"] is None

@@ -95,38 +95,81 @@ def recomputed_total_return(close_wide, dividend_wide):
     return (close_wide + dividend_wide.fillna(0.0)) / close_wide.shift(1) - 1.0
 
 
-def eur_excess_returns(prices, fx, risk_free, value="adj_close"):
-    """The sleeve frame every factor result is measured on: EUR total returns in excess of
-    the euro overnight rate.
+def sleeve_order(frame):
+    """The sleeve map's order where the frame carries the whole universe, the frame's own otherwise.
 
-    Four things this has a quiet wrong version of. The return is the feed's adjusted close
-    ratio, so it is already a total return in the instrument's own denomination. A line
-    quoted in another currency is translated with the same multiplicative rule the factor
-    spine uses - divide by that currency's own leg, never multiply, and never translate a
-    line with another line's currency. The cash rate is subtracted, because every factor in
-    the model is an excess return or a spread and a left-hand side measured gross would
-    carry the cash rate into the intercept. And the month the panel's first bar cannot
-    produce is dropped as a structural absence while any other missing month is refused:
-    a filled zero is a fabricated observation, and it would enter every window containing it.
+    Every weight vector in the package is indexed by `TICKERS`, so a frame that came back in another
+    order would misalign against them silently. A partial frame is left alone rather than reordered,
+    so a fixture keeps the order it declared.
     """
-    # The panel's first bar has no predecessor, so its return does not exist. Dropped here
-    # rather than filled: a leg cannot translate a return that is not there, and a filled
-    # zero would enter every window containing it.
+    names = list(frame.columns)
+    order = [name for name in TICKERS if name in names]
+    return frame[order] if len(order) == len(names) else frame
+
+
+def currency_split(prices, fx, value="adj_close"):
+    """The panel's returns split into the legs the attribution decomposes, and the euro return they
+    multiply into.
+
+    A line quoted in another currency contributes three things: its return in its own denomination,
+    the return of holding that currency against the euro, and their product, which is the cross term
+    the decomposition names separately rather than folding into either. All three are returned
+    together, because the holding-based attribution decomposes along exactly this line and a caller
+    that rebuilt one leg from the other two would be reconstructing the input of the decomposition
+    it is meant to check.
+
+    The translation is the RECIPROCAL of the currency leg's own move, never the move itself: the rate
+    is quoted as units of the foreign currency per euro, so a euro that buys more of it loses on a
+    foreign return, and taking the leg directly would invert the currency basis while leaving the euro
+    return it is checked against untouched - the shape of error that never shows as a failed identity.
+    An instrument quoting in euro translates by exactly zero, and the frame says so rather than
+    carrying a rate it does not apply.
+    """
+    # The panel's first bar has no predecessor, so its return does not exist. Dropped rather than
+    # filled: a leg cannot translate a return that is not there, and a filled zero would enter every
+    # window containing it.
     local = total_return(wide(prices, value)).iloc[1:]
-    quotes = prices.groupby("instrument")["currency"].first()
     fx_returns = total_return(wide(fx, "close")).iloc[1:]
-    returns = local.copy()
-    for instrument, quote in quotes.items():
+    translation = pd.DataFrame(0.0, index=local.index, columns=local.columns)
+    euro = local.copy()
+    for instrument, quote in prices.groupby("instrument")["currency"].first().items():
         if quote == "EUR":
             continue
         leg_name = next((name for name, currency in FX_QUOTES.items() if currency == quote), None)
         if leg_name is None or leg_name not in fx_returns.columns:
             raise ValueError(f"{instrument} is quoted in {quote} and the snapshot carries no {quote} leg")
-        returns[instrument] = external.eur_translate(local[[instrument]], fx_returns[leg_name])[instrument]
+        translation[instrument] = 1.0 / (1.0 + fx_returns[leg_name]) - 1.0
+        euro[instrument] = external.eur_translate(local[[instrument]], fx_returns[leg_name])[instrument]
+    # The pivot labels rows with the month's first day; the factor spine and the joined panel are
+    # labelled with the month itself. One representation across every analytics frame, so a join
+    # between them cannot silently come back empty.
+    frames = {"local": local, "translation": translation, "euro": euro}
+    for frame in frames.values():
+        frame.index = pd.PeriodIndex(frame.index, freq="M")
+    return {name: sleeve_order(frame) for name, frame in frames.items()}
+
+
+def eur_excess_returns(prices, fx, risk_free, value="adj_close"):
+    """The sleeve frame every factor result is measured on: EUR total returns in excess of the
+    euro overnight rate.
+
+    Three things this has a quiet wrong version of. The return is the feed's adjusted close
+    ratio, so it is already a total return in the instrument's own denomination, and the
+    translation into euro is the split `currency_split` performs - one definition, so the frame
+    the factors are fitted on and the frame the attribution decomposes cannot disagree about
+    what a translation is. The cash rate is subtracted, because every factor in the model is an
+    excess return or a spread and a left-hand side measured gross would carry the cash rate into
+    the intercept. And the month the panel's first bar cannot produce is dropped as a structural
+    absence while any other missing month is refused: a filled zero is a fabricated observation,
+    and it would enter every window containing it.
+    """
+    returns = currency_split(prices, fx, value=value)["euro"]
 
     rate = risk_free.copy()
-    if isinstance(rate.index, pd.PeriodIndex):
-        rate.index = rate.index.to_timestamp(how="start")
+    # The split's frames are labelled with the month itself, so the cash rate is put on the same
+    # calendar rather than the return frame being moved onto the rate's: one representation, no
+    # timestamp round-trip in the middle of a subtraction.
+    rate.index = pd.PeriodIndex(rate.index, freq="M")
     rate = rate.reindex(returns.index)
     if rate.isna().any():
         raise ValueError(f"the risk-free series does not cover {list(rate.index[rate.isna()][:3])}")
@@ -137,16 +180,7 @@ def eur_excess_returns(prices, fx, risk_free, value="adj_close"):
     if len(uncomputed) and not structural:
         raise ValueError(f"the return frame holds months it cannot compute: {list(uncomputed[:3])}")
     excess = excess.loc[~excess.isna().any(axis=1)]
-    # The pivot labels rows with the month's first day; the factor spine and the joined panel
-    # are labelled with the month itself. One representation across every analytics frame, so
-    # a join between them cannot silently come back empty.
-    excess.index = pd.PeriodIndex(excess.index, freq="M")
-    # The pivot sorts its columns; the sleeve map's order is the one weights are indexed by,
-    # so the frame comes back in that order when it carries that universe. A partial frame
-    # is left alone rather than silently reordered, so a fixture keeps the order it declared.
-    names = list(excess.columns)
-    order = [name for name in TICKERS if name in names]
-    return excess[order] if len(order) == len(names) else excess
+    return sleeve_order(excess)
 
 
 def joined_months(price_months, factor_months, risk_free_months):

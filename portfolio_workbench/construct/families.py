@@ -196,6 +196,21 @@ def minimum_variance(covariance, mean=None, returns=None, cap=constraints.CAP):
     )
 
 
+def diversification_ratio(weights, covariance):
+    """The book's weighted-average volatility over its own volatility.
+
+    One at a book concentrated in a single sleeve and above one whenever sleeves do not move
+    together, so it is a statement about the covariance rather than about the weights: the denominator
+    is the book's actual volatility and the numerator is what its volatility would be if its sleeves
+    were uncorrelated. It is written once and read by the constructor that maximises it and by the
+    budget report that quotes it, because a second copy would be the ratio's name attached to a
+    different number.
+    """
+    matrix = np.asarray(covariance, dtype=float)
+    values = np.asarray(weights, dtype=float)
+    return float(values @ np.sqrt(np.diag(matrix))) / float(np.sqrt(values @ matrix @ values))
+
+
 def maximum_diversification(covariance, mean=None, returns=None, cap=constraints.CAP):
     """Maximum diversification: the ratio of weighted volatility to portfolio volatility.
 
@@ -212,7 +227,7 @@ def maximum_diversification(covariance, mean=None, returns=None, cap=constraints
         return -(spread / np.sqrt(variance) - (w @ spread) * (matrix @ w) / variance ** 1.5)
 
     return _solve(
-        lambda w: -float(w @ spread) / np.sqrt(float(w @ matrix @ w)),
+        lambda w: -diversification_ratio(w, matrix),
         np.full(matrix.shape[0], 1.0 / matrix.shape[0]),
         cap,
         _columns(covariance),
