@@ -319,6 +319,42 @@ def test_a_rerun_reproduces_the_metric_table_and_the_tolerance_is_stated(stack):
     assert checked["tolerance"] == statistics.RERUN_TOLERANCE
 
 
+def test_the_notebook_set_covers_the_package_and_is_the_generated_one():
+    """The notebooks are generated from the code, so the claim that they cannot drift is checkable.
+
+    Three ways they could stop being true, each asserted rather than assumed: a module added to the
+    package and driven by no notebook, a module claimed by two notebooks, and a module header or a
+    source line edited without regenerating the notebook that renders it. The last is the one that
+    matters - it is the failure that leaves a notebook describing code that no longer exists. Outputs
+    are not compared, because they carry a kernel's own timing.
+    """
+    import nbformat
+
+    from reporting import notebooks as notebooks_module
+
+    root = Path(__file__).resolve().parents[1]
+    driven = [module for record in notebooks_module.RECORDS for module in record["drives"]]
+    assert len(driven) == len(set(driven)), "a module is driven by two notebooks"
+    present = {
+        str(path.relative_to(root / "portfolio_workbench"))
+        for path in (root / "portfolio_workbench").rglob("*.py")
+        if path.name != "__init__.py"
+    }
+    assert set(driven) == present, f"undriven {sorted(present - set(driven))}"
+
+    for record in notebooks_module.RECORDS:
+        path = root / "notebooks" / f"{record['slug']}.ipynb"
+        assert path.exists(), f"{path.name} was never written"
+        written = nbformat.read(path, as_version=4)
+        errors = [output for cell in written.cells for output in cell.get("outputs", []) if output.get("output_type") == "error"]
+        assert not errors, f"{path.name} carries {len(errors)} failed cell(s)"
+        assert all(cell.get("execution_count") for cell in written.cells if cell.cell_type == "code"), f"{path.name} has an unexecuted cell"
+        rendered = notebooks_module.notebook(record)
+        assert [cell.source for cell in written.cells] == [cell.source for cell in rendered.cells], (
+            f"{path.name} is not what the code renders now; run python3 -m reporting.notebooks"
+        )
+
+
 def test_every_method_is_traced_to_a_cited_source():
     """Done criterion 6: the source map is checked over the code, not over a hand-kept list."""
     missing = source_map.unmapped()
