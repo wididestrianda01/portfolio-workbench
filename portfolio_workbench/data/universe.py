@@ -1,6 +1,9 @@
 """The frozen universe, the mandate constants and the panel window.
 
-Nothing here is derived at run time: every value was fixed before the build began.
+Every value here was fixed before the build began, with one exception that is derived from the maps
+above it rather than restated: `INSTRUMENT_GROUP` is the only place a ticker is joined to a budget
+group, so a second copy cannot drift from the sleeve map and leave the budget aggregating a book it was
+not declared against.
 Insertion order is load-bearing. `TICKERS` is built from `SLEEVES`, and every weight
 vector in the package is indexed by `TICKERS`, so reordering the sleeve map would
 silently misalign weights against returns without raising anything.

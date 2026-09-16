@@ -133,7 +133,7 @@ def single_period(portfolio_weights, benchmark_weights, portfolio_returns, bench
     }
 
 
-def allocation_only(book, benchmark_weights, split):
+def allocation_only(book, benchmark_weights, split, risk_free):
     """Every month's lines for one book, from its weight path and the panel's currency split.
 
     The portfolio holds one weight per sleeve and the benchmark holds the policy weights, so the weight
@@ -146,6 +146,16 @@ def allocation_only(book, benchmark_weights, split):
     Allocation is measured on local returns for the reason stated in the module: measuring it in euro
     and then adding a currency line counts the translation twice, and the double count is invisible -
     the lines still sum, they simply attribute a currency move to allocation.
+
+    The level returned beside the lines is the benchmark's own return **in the frame the rest of the
+    package reports in**: the policy book's euro leg less the accrued cash rate. The frame is a decision
+    here and only here, because the lines are a weight deviation applied to returns and the cash rate
+    cancels out of a deviation - it sums to zero - while a level does not. That asymmetry is what makes
+    a level assembled from the local leg beside a euro active series look plausible: the lines still
+    reconcile, and the level they are added to is a third object belonging to no frame at all. The
+    grid's own book and net series are in the reported frame, so the `gross` built on this level is
+    genuinely the book's return, and the cost line that subtracts the two measures the charge rather
+    than the difference between two accounts of the same year.
     """
     book = book.reindex(columns=split["local"].columns)
     months = book.index.intersection(split["local"].index)
@@ -162,6 +172,13 @@ def allocation_only(book, benchmark_weights, split):
     benchmark = pd.Series(benchmark_weights, dtype=float).reindex(local.columns)
     if benchmark.isna().any():
         raise ValueError("the benchmark does not cover every sleeve the book holds")
+    # The split's frames are labelled with the month itself, as `eur_excess_returns` does it, so the
+    # cash rate is put on the same calendar rather than the level being moved onto the rate's.
+    accrual = pd.Series(risk_free, dtype=float)
+    accrual.index = pd.PeriodIndex(accrual.index, freq="M")
+    accrual = accrual.reindex(months)
+    if accrual.isna().any():
+        raise ValueError(f"the risk-free series does not cover {list(accrual.index[accrual.isna()][:3])}")
 
     deviation = weights.sub(benchmark, axis=1)
     allocation = deviation.mul(local.sub(local @ benchmark, axis=0), axis=0)
@@ -180,7 +197,7 @@ def allocation_only(book, benchmark_weights, split):
         "currency": currency,
         "interaction": interaction,
         "lines": lines,
-        "benchmark": pd.Series(local @ benchmark, index=months),
+        "benchmark": pd.Series(euro @ benchmark, index=months) - accrual,
         "selection": 0.0,
         "selection_absent": SELECTION_ABSENT,
         "source": BRINSON_FACHLER,
@@ -318,7 +335,7 @@ def linking(portfolio, benchmark, effects, tolerance=LINKING_TOLERANCE):
     }
 
 
-def decompose(book, benchmark_weights, split, net=None):
+def decompose(book, benchmark_weights, split, risk_free, net=None):
     """One cell's whole attribution: the monthly lines, the linked totals, and the cost line.
 
     The linking runs on the three lines and on nothing else, because those are the effects that sum to
@@ -327,8 +344,14 @@ def decompose(book, benchmark_weights, split, net=None):
     belong to. Each line is also linked sleeve by sleeve on the same coefficients, because the
     coefficients belong to the period rather than to the line: the sleeve totals then sum to the linked
     total, and the workbook can say which sleeve moved an effect rather than only how big it was.
+
+    Both levels are the benchmark's own, taken in the frame the package reports in, so `gross` here is
+    the book's return and not a level assembled across two frames - the grid's own `gross` and `net`
+    series are that same object, which is what makes the cost line beside them a charge rather than a
+    difference between two accounts of one year. The gate holds the two against each other on every
+    cell, because the way this went wrong once was a level in a frame nobody had named.
     """
-    block = allocation_only(book, benchmark_weights, split)
+    block = allocation_only(book, benchmark_weights, split, risk_free)
     benchmark = block["benchmark"]
     gross = block["lines"]["active"] + benchmark
     result = {
@@ -397,7 +420,8 @@ def main(root=None):
     benchmark_weights = grid_module.policy_weights(grid["returns"].columns)
     cells = []
     for result in grid["results"]:
-        block = decompose(result["weights"], benchmark_weights, split, net=result["net"])
+        block = decompose(result["weights"], benchmark_weights, split, document["risk_free"]["monthly"],
+                          net=result["net"])
         block["id"] = result["id"]
         block["stage"] = result["spec"]["stage"]
         cells.append(block)

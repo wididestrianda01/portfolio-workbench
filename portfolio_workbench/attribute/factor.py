@@ -61,7 +61,7 @@ CROSS_VIEW_SCALE_FLOOR = 1e-6
 BLOCK = exposures.BLOCK
 
 
-def design(fit, factors, block=BLOCK):
+def design(fit, factors):
     """Every month's coefficients and the series they are read against, on one basis.
 
     Returns a coefficient frame and a value frame per factor, both month by sleeve, so the
@@ -77,7 +77,7 @@ def design(fit, factors, block=BLOCK):
     loading is a second reading of it rather than a second part of it. And every frame is reindexed onto
     the fit's own traded months, so a month cannot enter the attribution that the fit did not cover.
     """
-    block = list(block)
+    block = list(BLOCK)
     months = pd.PeriodIndex(fit["traded"], freq="M")
     spine_columns = [column for column in factors.columns if column not in block]
     sleeves = list(fit["beta"][factors.columns[0]].columns)
@@ -116,7 +116,7 @@ def design(fit, factors, block=BLOCK):
     }
 
 
-def design_covariance(fit, factors, block=BLOCK):
+def design_covariance(fit, factors):
     """Each window's own covariance of the regressors the coefficients were fitted against.
 
     The covariance the risk split reads has to be the one of the series the loadings belong to, which
@@ -124,7 +124,7 @@ def design_covariance(fit, factors, block=BLOCK):
     are net of their predecessors inside the window, and a covariance of the declared series would be
     the covariance of a different set of regressors.
     """
-    block = list(block)
+    block = list(BLOCK)
     spine_columns = [column for column in factors.columns if column not in block]
     order = [*spine_columns, *block]
     out = {}
@@ -254,26 +254,33 @@ def fund_example(series, factors, bar):
 
     It is a worked example and not a module for two reasons that are worth stating: it adds no
     machinery the factor layer does not already carry, and nothing in the research questions needs it.
+
+    The three refusals are returned rather than raised, and no caller catches anything: a track record
+    that never moves, one too short for the regression, and a factor frame that does not cover its
+    months. Each is an answer about the book being read, and a caller that swallowed whatever the
+    regression raised as one of them would be reporting a broken fit as a finding about a manager.
     """
     values = pd.Series(series, dtype=float)
     # A track record that never moves has no residual to test and no standard error to divide by; the
     # refusal is explicit rather than a NaN, because a NaN t-statistic would print as a number.
     if float(values.std(ddof=1)) == 0.0:
-        raise ValueError("the track record does not vary, so there is no residual to test")
+        return {"refused": "the track record does not vary, so there is no residual to test",
+                "months": int(len(values))}
     months = pd.PeriodIndex(values.index, freq="M").intersection(pd.PeriodIndex(factors.index, freq="M"))
     if len(months) < exposures.MIN_OBS:
-        raise ValueError(f"{len(months)} months cannot support the {len(factors.columns)}-factor regression")
+        return {"refused": f"{len(months)} months cannot support the {len(factors.columns)}-factor regression",
+                "months": int(len(values))}
     y = pd.DataFrame({"fund": values.reindex(months)})
-    design = factors.reindex(months)
-    if design.isna().to_numpy().any():
-        raise ValueError("the factor frame does not cover the fund's months")
-    fit = exposures.regress(y, design)
+    frame = factors.reindex(months)
+    if frame.isna().to_numpy().any():
+        return {"refused": "the factor frame does not cover the fund's months", "months": int(len(values))}
+    fit = exposures.regress(y, frame)
     alpha, t_alpha = float(fit["alpha"][0]), float(fit["t_alpha"][0])
     standard_error = abs(alpha / t_alpha) if t_alpha else float("nan")
     detectable = statistics.POWER * standard_error
     return {
         "months": len(months),
-        "factors": list(design.columns),
+        "factors": list(frame.columns),
         "alpha_monthly": alpha,
         "alpha_annualised": alpha * metrics.PERIODS_PER_YEAR,
         "t_alpha": t_alpha,
@@ -291,33 +298,29 @@ def fund_example(series, factors, bar):
     }
 
 
-def fund_view(series, factors, bar):
-    """The worked example, or the refusal to run it - the two are the same answer to different books."""
-    try:
-        return fund_example(series, factors, bar)
-    except ValueError as reason:
-        return {"refused": str(reason), "months": int(len(series))}
-
-
 def report(cells, document, fit, holding, count=5):
     """Both views side by side, the risk split, and the fund example with its claim refused."""
     months = holding[0]["decomposition"]["months"]
-    print(f"[factor] snapshot {document['snapshot_id']}: {len(fit['traded'])} refits "
+    print(f"[attrib] snapshot {document['snapshot_id']}: {len(fit['traded'])} refits "
           f"{months.min()}..{months.max()} on {len(holding[0]['decomposition']['factors'].columns)} factors")
-    print(f"[factor] two views of one active return, never added to each other: the holding-based "
+    print(f"[attrib] two views of one active return, never added to each other: the holding-based "
           f"Brinson total from {brinson.BRINSON_FACHLER}, and this factor decomposition as the explanation")
-    print(f"[factor] {'cell':<34s}{'brinson':>11s}{'factors':>11s}{'alpha':>10s}{'unexplained':>13s}"
+    # The holding-based column is the sum of the monthly lines, unlinked, because the cross-view residual
+    # beside it is a monthly identity: linking is what turns those lines into a compounded total, and the
+    # linked total is the one `attribute/brinson.py` reports. Two numbers under one name would be read as
+    # a disagreement between the views, so the column says which of the two it is.
+    print(f"[attrib] {'cell':<34s}{'brinson-sum':>12s}{'factors':>11s}{'alpha':>10s}{'unexplained':>13s}"
           f"{'cross-view':>12s}")
     for cell, composition in zip(cells, holding):
         view, parts = composition["cross_view"], composition["decomposition"]
-        print(f"[factor] {cell['id']:<34s}"
-              f"{float(cell['lines'][list(brinson.LINES)].sum(axis=1).sum()):>+11.4%}"
+        print(f"[attrib] {cell['id']:<34s}"
+              f"{float(cell['lines'][list(brinson.LINES)].sum(axis=1).sum()):>+12.4%}"
               f"{float(parts['factors'].sum().sum()):>+11.4%}"
               f"{float(parts['alpha'].sum()):>+10.4%}"
               f"{float(parts['residual'].sum()):>+13.4%}"
               f"{view['worst']:>12.2e}")
     worst = max(holding, key=lambda composition: composition["cross_view"]["worst"])
-    print(f"[factor] the cross-view residual is largest on {worst['id']} at "
+    print(f"[attrib] the cross-view residual is largest on {worst['id']} at "
           f"{worst['cross_view']['worst']:.2e} against a scale of {worst['cross_view']['scale']:.4%} "
           f"(relative {worst['cross_view']['relative']:.1e}, tolerance {worst['cross_view']['tolerance']:.0e}): "
           f"zero by construction, since both views decompose the same series, and kept because it fires "
@@ -326,35 +329,36 @@ def report(cells, document, fit, holding, count=5):
     leader = max(cells, key=lambda cell: float(cell["linked"]["carino"]["total"]))
     composition = next(entry for entry, cell in zip(holding, cells) if cell is leader)
     ranked = composition["decomposition"]["factors"].sum().abs().sort_values(ascending=False).index[:count]
-    print(f"[factor] {leader['id']}, factor by factor over {len(months)} months (summed contributions, "
+    print(f"[attrib] {leader['id']}, factor by factor over {len(months)} months (summed contributions, "
           f"then alpha and the unexplained residual):")
     for column in ranked:
-        print(f"[factor]   {column:<22s} {float(composition['decomposition']['factors'][column].sum()):>+10.4%}")
-    print(f"[factor]   {'alpha':<22s} {float(composition['decomposition']['alpha'].sum()):>+10.4%}   "
+        print(f"[attrib]   {column:<22s} {float(composition['decomposition']['factors'][column].sum()):>+10.4%}")
+    print(f"[attrib]   {'alpha':<22s} {float(composition['decomposition']['alpha'].sum()):>+10.4%}   "
           f"{'residual':<22s} {float(composition['decomposition']['residual'].sum()):>+10.4%}   "
           f"realised residual volatility "
-          f"{float(composition['decomposition']['residual'].std(ddof=1) * np.sqrt(12)):.2%}/yr against the "
-          f"windows' estimate of {float(np.sqrt(composition['decomposition']['residual_estimate'].mean()) * np.sqrt(12)):.2%}/yr")
+          f"{float(composition['decomposition']['residual'].std(ddof=1) * np.sqrt(metrics.PERIODS_PER_YEAR)):.2%}/yr "
+          f"against the windows' estimate of "
+          f"{float(np.sqrt(composition['decomposition']['residual_estimate'].mean()) * np.sqrt(metrics.PERIODS_PER_YEAR)):.2%}/yr")
     risk = composition["risk"]
     share = "undefined, the book holding no tracking error" if risk["factor_share"] is None else f"{risk['factor_share']:.1%} factor"
-    print(f"[factor] {leader['id']}'s tracking error, factor-based only, split by the one definition in the "
+    print(f"[attrib] {leader['id']}'s tracking error, factor-based only, split by the one definition in the "
           f"package: factor part {risk['factor_tracking_error']:.2%}/yr and idiosyncratic part "
           f"{risk['idio_tracking_error']:.2%}/yr against a total of {risk['total_tracking_error']:.2%}/yr "
           f"({share}), read off {risk['split']}")
     example = composition["fund"]
     if "refused" in example:
-        print(f"[factor] the fund decomposition is not run on {leader['id']}: {example['refused']}")
+        print(f"[attrib] the fund decomposition is not run on {leader['id']}: {example['refused']}")
         return {"cells": cells, "holding": holding, "fit": fit}
-    print(f"[factor] the fund decomposition, as a worked example only: {leader['id']} read as an external "
+    print(f"[attrib] the fund decomposition, as a worked example only: {leader['id']} read as an external "
           f"manager's track record over {example['months']} months gives alpha "
           f"{example['alpha_annualised']:+.2%}/yr at t {example['t_alpha']:+.2f} against "
           f"{len(example['factors'])} factors, residual volatility "
           f"{example['residual_volatility_annualised']:.2%}/yr, R2 {example['r2']:.2f}")
-    print(f"[factor] the family-wise bar is {example['bar']:.4f} and the smallest alpha this sample could "
+    print(f"[attrib] the family-wise bar is {example['bar']:.4f} and the smallest alpha this sample could "
           f"have detected at eighty percent power is {example['detectable_alpha_annualised']:.2%}/yr: "
           f"{example['claim']}")
     for line in document["warnings"]:
-        print(f"[factor] {line}")
+        print(f"[attrib] {line}")
     return {"cells": cells, "holding": holding, "fit": fit}
 
 
@@ -376,7 +380,8 @@ def main(root=None):
     policy = grid_module.benchmark(grid["returns"], grid["months"])
     bar = statistics.family_wise_bar(len(registry.CELLS))
     for result in grid["results"]:
-        holding_block = brinson.decompose(result["weights"], benchmark_weights, split, net=result["net"])
+        holding_block = brinson.decompose(result["weights"], benchmark_weights, split,
+                                         document["risk_free"]["monthly"], net=result["net"])
         holding_block["id"] = result["id"]
         active_weights = result["weights"].sub(benchmark_weights, axis=1)
         composition = decomposition(active_weights, returns, fit, named, model=model)
@@ -388,7 +393,7 @@ def main(root=None):
                 holding_block["lines"][list(brinson.LINES)].sum(axis=1), composition["total"]
             ),
             "risk": risk_attribution(active_weights, fit, named, model=model, covariances=covariances),
-            "fund": fund_view(active, named, bar),
+            "fund": fund_example(active, named, bar),
         }
         cells.append(holding_block)
         holding.append(entry)

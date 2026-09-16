@@ -269,14 +269,19 @@ def report(cells, document, policy, default=None):
     print(f"[risk] components sum to total risk when the measure is homogeneous of degree one and the "
           f"decomposition is the Euler one - true for volatility and expected shortfall, false for the "
           f"value at risk: checked numerically to {ADDITIVITY_TOLERANCE:.0e} relative on every run")
-    print(f"[risk] {'run':<34s}{'equity':>9s}{'government':>12s}{'credit':>9s}{'real+cash':>11s}"
-          f"{'vol/yr':>9s}{'div ratio':>11s}{'additivity':>12s}")
+    # The columns are the declared vector's own keys, in its own order and under its own names: a group
+    # renamed or added in the data layer moves this table, instead of leaving it printing four names that
+    # no longer key it. The keys are printed as declared rather than abbreviated, so a reader can match a
+    # column to the vector quoted two lines above.
+    budget_columns = [(group, max(len(group) + 2, 9)) for group in universe.RISK_BUDGET]
+    print(f"[risk] {'run':<34s}"
+          + "".join(f"{group:>{width}s}" for group, width in budget_columns)
+          + f"{'vol/yr':>9s}{'div ratio':>11s}{'additivity':>12s}")
     for cell in cells:
         groups = cell["budget"]["by_group"]
         print(f"[risk] {cell['id']:<34s}"
-              f"{groups.loc['equity', 'realised']:>9.1%}{groups.loc['government', 'realised']:>12.1%}"
-              f"{groups.loc['credit', 'realised']:>9.1%}{groups.loc['real_and_cash', 'realised']:>11.1%}"
-              f"{cell['contributions']['volatility_annualised']:>9.2%}{cell['diversification']:>11.2f}"
+              + "".join(f"{groups.loc[group, 'realised']:>{width}.1%}" for group, width in budget_columns)
+              + f"{cell['contributions']['volatility_annualised']:>9.2%}{cell['diversification']:>11.2f}"
               f"{cell['additivity']['residual']:>12.2e}")
     worst = max(cells, key=lambda cell: cell["budget"]["by_group"]["gap"].abs().max())
     group = worst["budget"]["largest_gap"]
