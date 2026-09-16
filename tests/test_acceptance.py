@@ -5,6 +5,9 @@ take on trust are asserted here rather than left in prose, so a change that brea
 fails one command.
 """
 
+import ast
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -100,3 +103,28 @@ def test_the_factor_layer_runs_end_to_end_on_the_frozen_snapshot(run):
         assert list(matrix.index) == universe.TICKERS, f"{name} lost the sleeve map's order"
         assert np.allclose(matrix.to_numpy(), matrix.to_numpy().T)
         assert np.all(np.linalg.eigvalsh(matrix.to_numpy()) > -1e-18), f"{name} is not positive semi-definite"
+
+
+def test_nothing_in_the_analytics_imports_the_reporting_layer():
+    """The dependency direction the package shape fixes, checked over the import graph.
+
+    The rule is not stylistic: the analytics have to run on a machine with no reporting package and no
+    spreadsheet library, and an import of the reporter from inside a module would make the workbook's
+    dependencies the engine's. Reading the source for the string would pass on a commented-out line and
+    fail on an aliased import, so the check parses each module and reads the import statements.
+    """
+    root = Path(__file__).resolve().parents[1] / "portfolio_workbench"
+    modules = sorted(root.rglob("*.py"))
+    assert modules, f"no analytics modules found under {root}"
+    offenders = []
+    for path in modules:
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                names = [node.module or ""]
+            else:
+                continue
+            if any(name.split(".")[0] == "reporting" for name in names):
+                offenders.append(f"{path.relative_to(root)}:{node.lineno}")
+    assert not offenders, f"the analytics imports the reporting layer at {offenders}"
