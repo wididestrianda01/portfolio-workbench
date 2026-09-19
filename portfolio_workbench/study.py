@@ -41,6 +41,11 @@ from .data import loader
 from .evaluate import metrics
 from .risk import covariance as covariance_module
 
+# The name the policy book's own budget record is filed under, in the mapping that holds every run's.
+# It is a name rather than a second record beside the mapping, because the policy book is read by the
+# same consumers as the cells and filed with them; it is a constant because two modules test it.
+POLICY_BOOK = "policy"
+
 
 def traded_months(grid):
     """The out-of-sample window: the months the engine trades, read off the run rather than re-cut.
@@ -89,7 +94,7 @@ def risk_budgets(grid, window, covariance, policy, benchmark):
         for result in grid["results"]
     }
     policy_path = pd.DataFrame([policy] * len(benchmark), index=benchmark.index)
-    budgets["policy"] = record("policy", policy_path)
+    budgets[POLICY_BOOK] = record(POLICY_BOOK, policy_path)
     return budgets
 
 
@@ -116,6 +121,8 @@ def analyse(document, grid=None):
         document=document,
         returns=returns,
         months=months,
+        traded=traded,
+        policy=policy,
         grid=grid,
         benchmark=benchmark,
         sheet=sheet,
@@ -145,7 +152,7 @@ def main(root=None):
     package has no tag for one of those.
     """
     analysis = analyse(loader.load_panel(root))
-    traded = analysis.grid["results"][0]["traded"]
+    traded = analysis.traded
     print(f"[table] analysis: {len(analysis.months)} panel months, {len(traded)} traded "
           f"({traded.min()}..{traded.max()}), {len(analysis.grid['results'])} runs and "
           f"{len(analysis.grid['cuts'])} cut")

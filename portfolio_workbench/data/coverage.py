@@ -13,7 +13,7 @@ import sys
 
 import numpy as np
 
-from . import loader, panel
+from . import loader, panel, universe
 
 
 def main(root=None):
@@ -29,6 +29,14 @@ def main(root=None):
           f"× {prices['instrument'].nunique()} sleeves")
     if document.dropped.prices:
         print(f"[data] {document.dropped.prices} rows fell outside the declared window")
+    # The rule is the window's, not the join's, so the unpriced legs are held to it too and the cost is
+    # reported beside the priced legs' own count. The tail matters more than the total: a rate leg
+    # accrued from whatever its publisher has published reaches past the panel's last closed month.
+    trimmed_rate = document.dropped.risk_free["monthly"]
+    trimmed_factors = sum(document.dropped.factors.values())
+    print(f"[data] the declared window applies to the month-labelled legs too: {trimmed_rate} rate-leg "
+          f"months and {trimmed_factors} factor-leg months fall outside {universe.WINDOW_START}.."
+          f"{universe.WINDOW_END}, counted rather than carried unnamed")
 
     print("[data] coverage per instrument:")
     for instrument, cover in coverage.items():

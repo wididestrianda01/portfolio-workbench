@@ -493,21 +493,26 @@ def test_the_paired_test_reproduces_the_power_calculations_own_resolution():
     assert statistics.sign_holds(-0.4, -0.7) is True and statistics.sign_holds(-0.4, 0.7) is False
 
 
-def test_the_family_wise_bar_is_the_maximum_of_sixteen_normals_and_the_adjusted_one_is_lower():
+def test_the_family_wise_bar_is_the_two_sided_level_and_the_adjusted_one_is_lower():
     """The bar the design fixes: sixteen cells tested at once put the null statistic's threshold at
-    2.73, which is both the Bonferroni-equivalent value and the 95th percentile of the maximum of
-    sixteen independent standard normals. Positive correlation between the cells lowers the honest bar,
-    and both are reported rather than only the flattering one."""
+    2.9552, the two-sided Bonferroni level, which is also the 95th percentile of the maximum of sixteen
+    independent **absolute** standard normals. The one-sided quantile over the same cells is 2.7344, and
+    the two readings cannot share a value: holding an absolute statistic against the one-sided number
+    runs the family at 9.5% while the table is published as a 5% family-wise test. Positive correlation
+    between the cells lowers the honest bar, and both are reported rather than only the flattering one."""
     bar = statistics.family_wise_bar(16)
     rng = np.random.default_rng(20260912)
     drawn = rng.standard_normal((200000, 16))
     signed = float(np.percentile(drawn.max(axis=1), 95))
-    two_sided = float(np.percentile(np.abs(drawn).max(axis=1), 95))
+    absolute = float(np.percentile(np.abs(drawn).max(axis=1), 95))
 
-    assert bar == pytest.approx(2.7344, abs=1e-3)
-    assert signed == pytest.approx(bar, abs=0.05), "the directional reading is the one the table tests"
-    assert two_sided == pytest.approx(2.9552, abs=0.05), "the two-sided maximum is the Bonferroni value, a stricter bar"
-    assert statistics.family_wise_bar(1) == pytest.approx(1.6449, abs=1e-3)
+    assert bar == pytest.approx(2.9552, abs=1e-3)
+    assert absolute == pytest.approx(bar, abs=0.05), "the drawn two-sided maximum is the bar"
+    # The two readings, held against each other: a one-sided bar at twice the level **is** the one-sided
+    # quantile at this level, which is the number an absolute statistic must not be read against.
+    assert signed == pytest.approx(statistics.family_wise_bar(16, alpha=0.10), abs=0.01)
+    assert statistics.family_wise_bar(16) > signed, "the bar is the stricter of the two readings"
+    assert statistics.family_wise_bar(1) == pytest.approx(1.96, abs=1e-3), "one test is the two-sided 5% value"
     assert statistics.family_wise_bar(20) > bar, "more cells cannot buy a weaker bar"
 
     independent = np.eye(16)
@@ -527,7 +532,7 @@ def test_the_haircut_is_stated_as_self_imposed_and_the_retention_separates_a_lea
     borrow an authority the reading does not give it. The bootstrap resamples the months once and
     shares the draw across the cells, so a planted advantage keeps its rank and a panel of noise does
     not."""
-    haircut = statistics.haircut(2.8, statistics.family_wise_bar(16))
+    haircut = statistics.haircut(3.0, statistics.family_wise_bar(16))
     assert haircut["clears"] is True
     assert statistics.haircut(2.0, statistics.family_wise_bar(16))["clears"] is False
     assert "self-imposed" in haircut["statement"] and "not a regulatory requirement" in haircut["statement"]
@@ -587,7 +592,7 @@ def test_a_rerun_agrees_within_the_stated_tolerance_and_a_moved_number_does_not(
     fire on a number that moved for a reason and to pass on floating-point noise."""
     table = {
         "a": {"information_ratio": 0.544, "net_cumulative": 1.3339},
-        "bar": {"family_wise": 2.7344, "adjusted": 2.3263},
+        "bar": {"family_wise": 2.9552, "adjusted": 2.5758},
     }
     assert comparison.reproduces(table, table)["agrees"] is True
     tiny = {"a": {"information_ratio": 0.544 + 1e-9, "net_cumulative": 1.3339}, "bar": table["bar"]}
@@ -608,14 +613,14 @@ def test_a_recommendation_claim_carries_the_bar_three_ingredients():
         "cell": "minimum_variance",
         "verdict": comparison.CANDIDATE,
         "paired_benchmark": {"statistic": 2.9},
-        "haircut": {"bar": 2.7344, "statement": "self-imposed from the literature"},
+        "haircut": {"bar": 2.9552, "statement": "self-imposed from the literature"},
         "information_ratio": 0.42,
         "cap_binding_frequency": 3.21,
         "cap_binding_steps": 131,
         "months": 131,
     }
     claim = comparison.claimed(row)
-    assert claim["statistic"] == 2.9 and claim["bar"] == 2.7344
+    assert claim["statistic"] == 2.9 and claim["bar"] == 2.9552
     assert claim["information_ratio_net"] == 0.42 and claim["cost_bp"] == constraints.COST_BP
     assert claim["cap_binding_frequency"] == 3.21 and claim["cap_binding_steps"] == 131
     assert claim["steps"] == 131 and "self-imposed" in claim["statement"]

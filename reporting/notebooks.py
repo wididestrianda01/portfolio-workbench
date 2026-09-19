@@ -991,7 +991,7 @@ print(f"run manifests are written under the snapshot's own directory, {grid.DEFA
 ''',
         "reading": (
             "The grid produces the series the comparison is read from, and its resolution limit is "
-            "the cell count: sixteen distinct cells tested against two families leave a family-wise "
+            "the cell count: the distinct cells tested against two families leave a family-wise "
             "bar that a real but modest advantage will not clear. A reader must not read a cell's "
             "rank in the table as a recommendation: the ranking is descriptive, and a recommendation "
             "requires every rung of the ladder including the bootstrap and the second protocol, "
@@ -1108,10 +1108,11 @@ from portfolio_workbench.compare import registry
 from portfolio_workbench.evaluate import statistics
 
 # The bar over the pre-registered cells, read from the cell list rather than typed in, and held to the
-# identity the function claims: the one-sided normal quantile at the family-wise level.
+# identity the function claims: the two-sided normal quantile at the family-wise level, which is the
+# reading the absolute statistic is decided under.
 cells = len(registry.CELLS)
 bar = statistics.family_wise_bar(cells)
-assert abs(bar - norm.ppf(1.0 - statistics.ALPHA / cells)) < 1e-12, bar
+assert abs(bar - norm.ppf(1.0 - statistics.ALPHA / (2 * cells))) < 1e-12, bar
 assert statistics.haircut(3.0, bar)["clears"] is True
 assert statistics.haircut(2.0, bar)["clears"] is False
 

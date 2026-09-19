@@ -45,6 +45,25 @@ SUB_PERIODS = (
 )
 
 
+# The names the runner's summary and a row's metric block share, declared once. The runner names its
+# measurements the way the row prints them - that is what lets a run manifest be joined to the row it
+# belongs to - so the block reads them through this tuple rather than copying them key for key, which
+# is where a second vocabulary would come from.
+SHARED_WITH_SUMMARY = (
+    "gross_cumulative",
+    "turnover_annualised",
+    "cost_annualised",
+    "cap_binding_frequency",
+    "cap_binding_steps",
+    "turnover_cap_binding_steps",
+    "weight_stability",
+    "concentration",
+    "concentration_traded",
+    "largest_weight",
+    "largest_weight_traded",
+)
+
+
 def information_ratio(active, periods=PERIODS_PER_YEAR):
     """The annualised ratio of mean active return to its own volatility.
 
@@ -150,17 +169,7 @@ def block(result, benchmark):
         "mean_active_annualised": float(difference.mean() * PERIODS_PER_YEAR),
         "max_drawdown": drawdown(net),
         "net_cumulative": float((1.0 + net).prod() - 1.0),
-        "gross_cumulative": summary["gross_cumulative"],
-        "turnover_annualised": summary["turnover_annualised"],
-        "cost_annualised": summary["cost_annualised"],
-        "cap_binding_frequency": summary["cap_binding_frequency"],
-        "cap_binding_steps": summary["cap_binding_steps"],
-        "turnover_cap_binding_steps": summary["turnover_cap_binding_steps"],
-        "weight_stability": summary["weight_stability"],
-        "concentration": summary["concentration"],
-        "concentration_traded": summary["concentration_traded"],
-        "largest_weight": summary["largest_weight"],
-        "largest_weight_traded": summary["largest_weight_traded"],
+        **{name: summary[name] for name in SHARED_WITH_SUMMARY},
         "establishment_cost": summary["establishment"]["cost"],
         "cost_sensitivity": sensitivity(gross, turnover, benchmark),
         "sub_periods": sub_periods(difference),

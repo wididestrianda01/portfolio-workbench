@@ -45,12 +45,12 @@ from ..factors import exposures
 # second axis moving beside the one under test.
 REFIT = "monthly"
 
-# The fields a step record carries, in the order the report prints them. `window` holds the window's
-# months themselves and travels beside the record rather than in it, because a reader of the record
-# wants the month labels and a column of window objects would have to be unpacked by every one of them.
-# The list is the record's declaration, and it is checked on the records themselves in
-# `assert_no_look_ahead`: the frame that used to render it was built for every run and read by nobody,
-# so the declaration has to be held against something a run actually produced.
+# The fields a step record carries, in the order the report prints them. `window` is a member of the
+# record and is deliberately not listed here: it holds the window's months themselves, and a frame of
+# window objects is one every reader that wants the month labels has to unpack. The list is the record's
+# declaration, and it is checked on the records themselves in `assert_no_look_ahead` - the frame that
+# used to render it was built for every run and read by nobody, so the declaration is held against
+# something a run actually produced instead.
 FIELDS = (
     "traded",
     "window_start",

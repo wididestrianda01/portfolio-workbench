@@ -251,6 +251,12 @@ def test_every_month_labelled_leg_stops_at_the_declared_window(frozen):
     # rather than the join's, so a report that prints the leg cannot print a month no book was held for.
     untrimmed = loader.load_risk_free(frozen, manifest.read(frozen))["monthly"]
     assert untrimmed.index.max() > end
+    # And what the rule cost is carried rather than absorbed, on the unpriced legs as on the priced
+    # ones: the rate leg's tail month is the one the rule exists for, so its count cannot be zero.
+    assert document.dropped.risk_free["monthly"] == len(untrimmed) - len(document.risk_free.monthly)
+    assert document.dropped.risk_free["monthly"] >= 1
+    assert set(document.dropped.factors) == {"usd", "eur", "europe_usd", "fx_level"}
+    assert all(count >= 0 for count in document.dropped.factors.values())
 
 
 def test_the_fx_legs_are_the_one_exemption_from_the_issuer_facts(frozen):

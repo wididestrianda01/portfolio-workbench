@@ -160,6 +160,40 @@ def test_nothing_in_the_analytics_imports_the_reporting_layer():
     assert not offenders, f"the analytics imports the reporting layer at {offenders}"
 
 
+def test_the_layer_entry_points_reach_the_analysis_only_inside_their_functions():
+    """The one edge that runs against the layer order, and the rule that keeps it from becoming a cycle.
+
+    `study` sits above the layers and imports them, so a layer module that imported it at module level
+    would be a cycle: Python would refuse it outright, or accept it in one import order and not the
+    other, which is worse. Every entry point therefore reaches the analysis inside its own `main`, and
+    this check holds that deferral in place rather than leaving it to a comment. The edge is deliberate
+    and documented in the module's own header; an import moved to module level is a change to the
+    package's shape rather than a tidy-up.
+    """
+    root = Path(__file__).resolve().parents[1] / "portfolio_workbench"
+    deferred = []
+    for path in sorted(root.rglob("*.py")):
+        if path.name == "study.py":
+            continue
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                module = (node.module or "").split(".")[-1]
+                names = [alias.name.split(".")[-1] for alias in node.names]
+            elif isinstance(node, ast.Import):
+                module, names = "", [alias.name.split(".")[-1] for alias in node.names]
+            else:
+                continue
+            if module != "study" and "study" not in names:
+                continue
+            assert node not in tree.body, (
+                f"{path.relative_to(root)}:{node.lineno} imports the analysis at module level, which the "
+                "layer order cannot accept: the analysis imports this module"
+            )
+            deferred.append(f"{path.relative_to(root)}:{node.lineno}")
+    assert deferred, "nothing reaches the analysis, so this check is measuring nothing"
+
+
 def test_the_sql_statement_of_the_contract_agrees_with_the_pandas_path():
     """The table contract is stated twice - as pandas code the analytics run on, and as a query - and
     the two statements are checked against each other on the frozen snapshot.
@@ -204,7 +238,7 @@ def stack():
         "grid": analysis.grid,
         "benchmark": analysis.benchmark,
         "sheet": analysis.sheet,
-        "policy": grid_module.policy_weights(analysis.returns.columns),
+        "policy": analysis.policy,
         "covariance": analysis.covariance,
         "holding": list(analysis.attribution.values()),
         "analysis": analysis,
@@ -321,14 +355,39 @@ def test_the_euler_contributions_sum_to_volatility(stack):
 
 
 def test_the_pca_reconstruction_is_bounded(stack):
-    """Done criterion 3: the rank-k residual is the discarded eigenvalues, not an approximation."""
-    rule = cp.decompose(stack["grid"]["returns"])
-    assert rule["residual_sum"] if "residual_sum" in rule else True
+    """Done criterion 3: the rank-k residual is the discarded eigenvalues, not an approximation.
+
+    The residual is **measured**, not restated: the correlation matrix the rule decomposed is
+    reconstructed from the retained components, and what the reconstruction leaves has the discarded
+    eigenvalues as its own spectrum. Comparing `sum(eigenvalues[k:])` with
+    `sum(eigenvalues) - sum(eigenvalues[:k])` would put the same quantity on both sides of the
+    comparison - true for any vector and any k - and would pass on a rule whose components were
+    wrong, which is the failure this criterion exists to catch.
+    """
+    returns = stack["grid"]["returns"]
+    rule = cp.decompose(returns)
     eigenvalues = rule["eigenvalues"]
     kept = rule["components"]
-    residual = float(np.sum(eigenvalues[kept:]))
-    assert np.isclose(residual, float(np.sum(eigenvalues)) - float(np.sum(eigenvalues[:kept])), atol=1e-10)
-    assert rule["variance_share"].sum() + residual / float(np.sum(eigenvalues)) == pytest.approx(1.0, abs=1e-10)
+    # The matrix the module decomposes, stated here rather than reached for: the correlation of the
+    # sleeve excess returns, diagonal ones, trace equal to the sleeve count.
+    correlation = np.corrcoef(returns.to_numpy(), rowvar=False)
+    loadings = rule["loadings"]
+    residual = correlation - loadings @ loadings.T
+    discarded = eigenvalues[kept:]
+
+    assert np.isclose(np.trace(residual), float(discarded.sum()), atol=1e-10)
+    assert np.isclose(np.linalg.norm(residual, "fro"), float(np.sqrt((discarded ** 2).sum())), atol=1e-10)
+    # The residual is rank-(sleeves - k) and its non-zero spectrum **is** the discarded one, with the
+    # rest of the spectrum at zero. Comparing the residual's own eigenvalues with the discarded ones is
+    # the statement the criterion makes; the previous form compared a sum with itself.
+    spectrum = np.sort(np.linalg.eigvalsh(residual))[::-1]
+    assert np.allclose(spectrum[: discarded.size], discarded, atol=1e-10), (
+        "the residual's non-zero spectrum is the discarded eigenvalues"
+    )
+    assert np.allclose(spectrum[discarded.size:], 0.0, atol=1e-10), (
+        "and the reconstruction leaves nothing else, so the residual's rank is the discarded count"
+    )
+    assert rule["variance_share"].sum() + float(discarded.sum()) / len(eigenvalues) == pytest.approx(1.0, abs=1e-10)
 
 
 def test_the_black_litterman_hand_case_passes():

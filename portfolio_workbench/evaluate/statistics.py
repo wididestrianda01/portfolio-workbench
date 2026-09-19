@@ -15,9 +15,14 @@ smallest difference that clears the bar at eighty percent power is `2.8016 * tha
 why a cell reported as **no difference detected** prints 0.27 beside it rather than nothing.
 
 **The bar is the family-wise one, and the correlation-adjusted bar is printed beside it.** Across
-sixteen cells the declared bar on the null statistic is the Bonferroni-equivalent `Phi^-1(1 - 0.05/16)`
-= 2.7344, which is also the 95th percentile of the maximum of sixteen independent standard normals -
-the directional reading, since the table asks whether a cell's advantage is positive.
+sixteen cells the declared bar on the null statistic is the Bonferroni-equivalent
+`Phi^-1(1 - 0.05/(2*16))` = 2.9552, taken at the two-sided level because the ladder compares the
+**absolute** statistic: a cell is reported as *different* from the benchmark, and the direction is read
+afterwards rather than being the hypothesis. The same number is the 95th percentile of the maximum of
+sixteen independent absolute standard normals to within a quarter of a percent (2.9478 measured against
+2.9552), and Bonferroni is the conservative one of the two. The one-sided quantile over the same cells
+is 2.7344 - the value this module shipped before the two readings were separated, and a bar that would
+have held the family to 9.5% rather than to the 5% it is declared at.
 The cells are positively correlated, so the effective number of tests is smaller and the honest bar
 would be lower; both numbers are printed, and the conservative one decides. The haircut is
 **self-imposed from the literature** - it sits in the same territory as the threshold that reading
@@ -60,15 +65,20 @@ RERUN_TOLERANCE = 1e-6
 def family_wise_bar(tests, alpha=ALPHA):
     """The bar a null statistic must clear when `tests` hypotheses are tested at once.
 
-    Bonferroni-equivalent, and equal to the 95th percentile of the maximum of `tests` independent
-    standard normals under the one-sided reading - the two are the same number to within a thousandth
-    at this count, which is why one value serves both readings. The one-sided reading is the one a
-    directional claim uses: the table asks whether a cell's advantage is positive, not whether its
-    statistic is extreme in either direction.
+    Bonferroni-equivalent and **two-sided**, because the statistic that is held against it is the
+    absolute one: `haircut` decides on `abs(statistic)` and the ladder labels a cell "significantly
+    behind" as well as "a candidate", so the hypothesis being tested is that the cell differs from the
+    benchmark and the sign is read as a direction afterwards. The level therefore splits over both
+    directions, which puts the quantile at `1 - alpha / (2 * tests)`.
+
+    Reading the same family-wise level one-sidedly gives a *lower* bar - `Phi^-1(1 - alpha/tests)`,
+    2.7344 over sixteen cells - and holding an absolute statistic against that number is what the
+    two readings cannot share: it would reject under the null at 9.5% while the table is published as
+    a 5% family-wise test. One quantile cannot serve both.
     """
     if tests < 1:
         raise ValueError(f"{tests} tests have no family-wise bar")
-    return float(norm.ppf(1.0 - alpha / tests))
+    return float(norm.ppf(1.0 - alpha / (2.0 * tests)))
 
 
 def correlation_matrix(frame):

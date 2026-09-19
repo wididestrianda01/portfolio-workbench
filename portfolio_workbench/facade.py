@@ -34,7 +34,12 @@ from .evaluate import metrics, statistics, walkforward
 from .factors import components, exposures, spanning, spine
 from .risk import covariance
 
-VERSION = "1.0"
+# The revision this boundary is released at, read back by a consumer that pinned the tag. It moves when
+# the modules below move, which is what makes it worth reading: the layers behind these names changed
+# after 1.0 - the loader hands back a named document, the step block returns its own count, the table
+# takes its arguments in the other order - so a consumer importing this file at 1.0 and at 1.1 is
+# calling two different engines, and the constant is how it can tell.
+VERSION = "1.1"
 
 # The contract a consumer satisfies before calling anything else here: the manifest it writes, the
 # loader that reads one back and fails closed on a mismatch, the as-of rule every join is gated on, the
@@ -47,9 +52,11 @@ construction = SimpleNamespace(families=families, means=means, constraints=const
 evaluation = SimpleNamespace(walkforward=walkforward, metrics=metrics, statistics=statistics)
 attribution = SimpleNamespace(brinson=brinson, factor=factor, euler=euler)
 
-# The inventory, in the order the docstring lists the groups: one namespace per entry point, each
-# carrying the modules that do its work. Read by `main` and by the acceptance fixture, so a group
-# dropped from here or a module dropped from a group is a failed check rather than a quieter boundary.
+# The inventory, in the order the docstring lists it: the **contract** first, which is what a consumer
+# satisfies before it calls anything, then the five analytics entry points, each carrying the modules
+# that do its work. Read by `main` and by the acceptance fixture, so a group dropped from here or a
+# module dropped from a group is a failed check rather than a quieter boundary. The first member is not
+# an entry point, which is why `main` counts the groups to one side of it rather than all of them.
 GROUPS = (
     ("contract", contract),
     ("factor_exposures", factor_exposures),

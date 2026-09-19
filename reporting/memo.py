@@ -127,7 +127,7 @@ def memo(evidence):
     document = evidence["document"]
     rows = sheet["rows"]
     by_cell = _by_cell(sheet)
-    traded = evidence["grid"]["results"][0]["traded"]
+    traded = evidence["analysis"].traded
     stage_a, stage_b, stage_c = _stage(rows, "A"), _stage(rows, "B"), _stage(rows, "C")
     leader = sheet["retention"]["leader"]
     leader_row = by_cell[leader]
@@ -235,7 +235,7 @@ def _rq1(stage_a, behind, leader_row, sheet):
     widest = max(stage_a, key=lambda row: row["tracking_error"])
     best = max(stage_a, key=lambda row: row["information_ratio"])
     return (
-        f"Six family cells span a tracking error from {min(row['tracking_error'] for row in stage_a):.2%} "
+        f"{len(stage_a)} family cells span a tracking error from {min(row['tracking_error'] for row in stage_a):.2%} "
         f"to {max(row['tracking_error'] for row in stage_a):.2%} a year and an information ratio from "
         f"{min(row['information_ratio'] for row in stage_a):+.3f} to {max(row['information_ratio'] for row in stage_a):+.3f}. "
         f"The dispersion is the answer to whether the family matters, and it is large relative to the "
@@ -247,9 +247,8 @@ def _rq1(stage_a, behind, leader_row, sheet):
         f"charged ({len(behind)} cells), and the widest tracking error among the family cells, on "
         f"`{widest['cell']}`, comes with an "
         f"information ratio of {widest['information_ratio']:+.3f}. The best information ratio among them is "
-        f"`{best['cell']}` at {best['information_ratio']:+.3f}; the single cell with a higher ratio on the "
-        f"full sample, `mean_variance_shrunk` at {sheet['rows'][2]['information_ratio']:+.3f}, carries a mean "
-        f"input rather than a risk-based objective, and RQ3 reads that axis.\n\n"
+        f"`{best['cell']}` at {best['information_ratio']:+.3f}, and that cell carries a mean input rather "
+        f"than a risk-based objective, which is the axis RQ3 reads.\n\n"
         f"The metric the question turns on is therefore tracking error rather than return: what separates "
         f"these families is how much risk they take away from the benchmark, and the leader on the full "
         f"sample, `{sheet['retention']['leader']}`, keeps its rank in only "
@@ -414,12 +413,13 @@ def _rq7(cost, leader_row, sheet):
 
 def _limitations(evidence, additivity_worst, link_worst):
     document = evidence["document"]
-    traded = len(evidence["grid"]["results"][0]["traded"])
+    traded = len(evidence["analysis"].traded)
+    cells = len(evidence["sheet"]["cells"])
     return (
         f"**The panel is one panel.** {len(universe.TICKERS)} UCITS sleeves, {len(document.months)} months "
         f"of which {traded} are traded, one mandate and one currency. A difference that this design cannot resolve is not reported as an "
         "absence, and a difference it does resolve is a statement about this universe.\n\n"
-        "**The noise floor is stated, not implied.** Sixteen cells tested against two families give a "
+        f"**The noise floor is stated, not implied.** {cells} cells tested against two families give a "
         "family-wise bar that a real but modest advantage will not clear, and the smallest detectable "
         "difference is printed on every row. The bootstrap and the expanding protocol are the two further "
         "rungs, and a cell failing either is reported as no difference detected rather than as a small "
@@ -446,7 +446,8 @@ def record(evidence):
     """The decision record: one page, six parts, with its own falsification conditions."""
     sheet = evidence["sheet"]
     document = evidence["document"]
-    traded = len(evidence["grid"]["results"][0]["traded"])
+    traded = len(evidence["analysis"].traded)
+    cells = len(sheet["cells"])
     rows = sheet["rows"]
     by_cell = _by_cell(sheet)
     leader = sheet["retention"]["leader"]
@@ -526,7 +527,7 @@ def record(evidence):
             "",
             f"One panel, {len(universe.TICKERS)} sleeves, {len(document.months)} months of which "
             f"{traded} are traded, one mandate and one currency. "
-            "Sixteen cells tested at a family-wise bar leave a resolution limit on every row. Cost is "
+            f"{cells} cells tested at a family-wise bar leave a resolution limit on every row. Cost is "
             "charged at a single per-side multiple with a sensitivity run beside it, and market impact and "
             "capacity are outside the panel. The multiple-testing correction is a self-imposed discipline. "
             "The exercise is a simulation and nothing here is advice or a client communication.",

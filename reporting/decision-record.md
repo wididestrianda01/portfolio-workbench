@@ -2,7 +2,7 @@
 
 A learning exercise performed in role: a simulated mandate with no client and no institution. Nothing in this document is investment advice, a recommendation to any person, or a client communication, and the register is deliberate.
 
-Snapshot `2026-09-13` - version 1.0 - written from 20 pre-registered runs over 16 distinct cells.
+Snapshot `2026-09-13` - version 1.1 - written from 20 pre-registered runs over 16 distinct cells.
 
 ## 1. Recommendation
 
@@ -10,7 +10,7 @@ Snapshot `2026-09-13` - version 1.0 - written from 20 pre-registered runs over 1
 
 ## 2. Evidence, with the haircut applied
 
-The bar over 16 cells is |z| >= 2.7344, which is also the multiple-testing haircut; at the 5.3 effective tests the realised correlation implies, it would be 2.3263, and the conservative value is the one applied. 16 of the 20 runs clear the bar, so a difference is detectable on those rows; 9 of them are significantly behind the benchmark once the cost is charged, 1 fails the rank-retention rung that follows, 2 have no expanding leg and cannot complete the ladder, and 0 clear every rung. The leader's rank retention across 2000 resamples is 67.5%. The haircut is self-imposed from the literature and is not a regulatory requirement.
+The bar over 16 cells is |z| >= 2.9552, which is also the multiple-testing haircut; at the 5.3 effective tests the realised correlation implies, it would be 2.5758, and the conservative value is the one applied. 15 of the 20 runs clear the bar, so a difference is detectable on those rows; 8 of them are significantly behind the benchmark once the cost is charged, 1 fails the rank-retention rung that follows, 2 have no expanding leg and cannot complete the ladder, and 0 clear every rung. The leader's rank retention across 2000 resamples is 67.5%. The haircut is self-imposed from the literature and is not a regulatory requirement.
 
 ## 3. Alternatives rejected
 
@@ -25,7 +25,7 @@ The chosen option is the one already held, so its cost is the ongoing policy boo
 
 ## 5. Limitations
 
-One panel, 11 sleeves, 191 months of which 131 are traded, one mandate and one currency. Sixteen cells tested at a family-wise bar leave a resolution limit on every row. Cost is charged at a single per-side multiple with a sensitivity run beside it, and market impact and capacity are outside the panel. The multiple-testing correction is a self-imposed discipline. The exercise is a simulation and nothing here is advice or a client communication.
+One panel, 11 sleeves, 191 months of which 131 are traded, one mandate and one currency. 16 cells tested at a family-wise bar leave a resolution limit on every row. Cost is charged at a single per-side multiple with a sensitivity run beside it, and market impact and capacity are outside the panel. The multiple-testing correction is a self-imposed discipline. The exercise is a simulation and nothing here is advice or a client communication.
 
 ## 6. Falsification conditions
 
@@ -37,4 +37,4 @@ The recommendation is withdrawn or revisited if any of the following holds:
 4. The cost multiple is revised upward far enough that a cell's advantage at the sensitivity run disappears, and the sensitivity was the only thing supporting it.
 5. The constraint set changes: a cap or band that binds on most steps makes a family's result a result about the constraints, and the perturbation runs exist to show how much.
 
-Written against snapshot `2026-09-13`, build version 1.0.
+Written against snapshot `2026-09-13`, build version 1.1.

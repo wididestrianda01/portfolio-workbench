@@ -177,19 +177,22 @@ def _rates(fx):
 
 
 def _trim_months(legs):
-    """Every month-labelled frame in a leg mapping, trimmed to the declared window.
+    """Every month-labelled frame in a leg mapping, trimmed to the declared window, with what it cost.
 
     A leg mapping holds more than its frames - a vintage stamp, a basis in basis points, a daily series
     on a calendar the window is not stated in - so the trim applies to what is indexed by month and
-    passes the rest through untouched.
+    passes the rest through untouched. The months dropped are counted and returned beside the kept
+    frames rather than discarded here: the priced legs' own trim is reported, and a rule that counts its
+    cost on one leg and is silent about the next leaves the reader to notice the difference.
     """
-    kept = {}
+    kept, dropped = {}, {}
     for name, frame in legs.items():
         if isinstance(frame, (pd.DataFrame, pd.Series)) and isinstance(frame.index, pd.PeriodIndex):
-            kept[name] = frame.loc[panel.window_months(frame.index)]
+            trimmed = frame.loc[panel.window_months(frame.index)]
+            kept[name], dropped[name] = trimmed, len(frame) - len(trimmed)
         else:
             kept[name] = frame
-    return kept
+    return kept, dropped
 
 
 def load_panel(root=None, as_of=None):
@@ -230,11 +233,12 @@ def load_panel(root=None, as_of=None):
     warnings += quality.run(fx, {}, taken)
     prices, dropped_prices = panel.window(prices)
     fx, dropped_fx = panel.window(fx)
-    # The same declared window for the legs that carry no `period_month` column. The rate leg is accrued
-    # from whatever its publisher has published, so without this it reaches into a month the panel's
-    # prices have not closed yet - a month the join hides and no book was held for.
-    factors = _trim_months(factors)
-    risk_free = _trim_months(risk_free)
+    # The same declared window for the legs that carry no `period_month` column, and the count of what
+    # it cost carried beside the priced legs'. The rate leg is accrued from whatever its publisher has
+    # published, so without this it reaches into a month the panel's prices have not closed yet - a
+    # month the join hides and no book was held for.
+    factors, dropped_factors = _trim_months(factors)
+    risk_free, dropped_risk_free = _trim_months(risk_free)
 
     if as_of is not None:
         prices = panel.as_of(prices, as_of)
@@ -277,7 +281,12 @@ def load_panel(root=None, as_of=None):
         risk_free=SimpleNamespace(**risk_free),
         months=months,
         warnings=warnings,
-        dropped=SimpleNamespace(prices=dropped_prices, fx=dropped_fx),
+        dropped=SimpleNamespace(
+            prices=dropped_prices,
+            fx=dropped_fx,
+            factors=dropped_factors,
+            risk_free=dropped_risk_free,
+        ),
         as_of=as_of if as_of is not None else taken,
         returns=panel.excess(split["euro"], risk_free["monthly"]),
         split=split,

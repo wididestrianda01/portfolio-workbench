@@ -317,11 +317,11 @@ def main(root=None):
     The budget is read against the analysis's covariance, which the analysis names in its own report:
     a budget read against a covariance the cell was not built on is a statement about two objects.
     """
-    from ..study import analyse
+    from ..study import POLICY_BOOK, analyse
 
     analysis = analyse(loader.load_panel(root))
-    cells = [book for identifier, book in analysis.budgets.items() if identifier != "policy"]
-    policy = analysis.budgets["policy"]
+    cells = [book for identifier, book in analysis.budgets.items() if identifier != POLICY_BOOK]
+    policy = analysis.budgets[POLICY_BOOK]
     heaviest = max(cells, key=lambda cell: cell["contributions"]["volatility_annualised"])
     report(cells, analysis.document, policy, default=heaviest)
     for cut in analysis.grid["cuts"]:
