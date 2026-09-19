@@ -364,6 +364,63 @@ def test_the_notebook_set_covers_the_package_and_is_the_generated_one():
         )
 
 
+def test_the_consumer_boundary_carries_the_contract_and_the_five_entry_points():
+    """The one import surface a consumer adopts, read against a declaration made outside the module.
+
+    A boundary is only worth pinning if its contents are stated somewhere other than itself, so the
+    five entry points and the modules behind them are declared here and the module is read against that
+    declaration. A group dropped from the boundary, or a module dropped from a group, fails this rather
+    than quietly narrowing what a consumer that pinned the revision can call; and identity rather than
+    equality is asserted, because the promise the boundary makes is that these are the layer's own
+    modules rather than copies of them.
+    """
+    import importlib
+
+    from portfolio_workbench import facade
+
+    declared = {
+        "contract": (
+            "portfolio_workbench.data.manifest",
+            "portfolio_workbench.data.loader",
+            "portfolio_workbench.data.panel",
+            "portfolio_workbench.data.quality",
+            "portfolio_workbench.data.sql",
+        ),
+        "factor_exposures": (
+            "portfolio_workbench.factors.exposures",
+            "portfolio_workbench.factors.components",
+            "portfolio_workbench.factors.spanning",
+            "portfolio_workbench.factors.spine",
+        ),
+        "risk_models": ("portfolio_workbench.risk.covariance",),
+        "construction": (
+            "portfolio_workbench.construct.families",
+            "portfolio_workbench.construct.means",
+            "portfolio_workbench.construct.constraints",
+        ),
+        "evaluation": (
+            "portfolio_workbench.evaluate.walkforward",
+            "portfolio_workbench.evaluate.metrics",
+            "portfolio_workbench.evaluate.statistics",
+        ),
+        "attribution": (
+            "portfolio_workbench.attribute.brinson",
+            "portfolio_workbench.attribute.factor",
+            "portfolio_workbench.budget.euler",
+        ),
+    }
+    assert [name for name, _ in facade.GROUPS] == list(declared)
+    for group_name, paths in declared.items():
+        group = getattr(facade, group_name)
+        bound = vars(group)
+        assert sorted(bound) == sorted(path.rsplit(".", 1)[-1] for path in paths), group_name
+        for path in paths:
+            member = path.rsplit(".", 1)[-1]
+            assert bound[member] is importlib.import_module(path), (
+                f"{group_name}.{member} is not the module itself, so a consumer would be calling a copy"
+            )
+
+
 def test_the_prose_deliverables_are_the_ones_the_code_writes():
     """The memo and the record are generated, so the copies in the repository are read against the code.
 

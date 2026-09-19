@@ -23,6 +23,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from portfolio_workbench import facade
 from portfolio_workbench.attribute import brinson
 from portfolio_workbench.budget import euler
 from portfolio_workbench.compare import grid as grid_module
@@ -38,8 +39,6 @@ from portfolio_workbench.evaluate import statistics
 HERE = Path(__file__).resolve().parent
 MEMO_PATH = HERE / "findings-memo.md"
 RECORD_PATH = HERE / "decision-record.md"
-
-VERSION = "1.0"
 
 DECLARATION = (
     "A learning exercise performed in role: a simulated mandate with no client and no institution. "
@@ -501,7 +500,7 @@ def record(evidence):
             "",
             DECLARATION,
             "",
-            f"Snapshot `{document['snapshot_id']}` - version {VERSION} - written from "
+            f"Snapshot `{document['snapshot_id']}` - version {facade.VERSION} - written from "
             f"{len(rows)} pre-registered runs over {len(sheet['cells'])} distinct cells.",
             "",
             "## 1. Recommendation",
@@ -566,7 +565,7 @@ def record(evidence):
             "5. The constraint set changes: a cap or band that binds on most steps makes a family's result "
             "a result about the constraints, and the perturbation runs exist to show how much.",
             "",
-            f"Written against snapshot `{document['snapshot_id']}`, build version {VERSION}.",
+            f"Written against snapshot `{document['snapshot_id']}`, build version {facade.VERSION}.",
             "",
         ]
     )

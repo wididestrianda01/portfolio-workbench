@@ -112,6 +112,11 @@ SHARED = {
         "the out-of-sample protocol of this effort: rolling sixty-month estimation, monthly refit, and an "
         "assertion that every estimation window ends before the month it trades"
     ),
+    "facade.py": (
+        "the consumer boundary of this build, established rather than cited: the data contract a consumer "
+        "satisfies and the five analytics entry points it then calls, named in one place so a layer "
+        "reshuffle costs an edit here rather than an edit in every consumer"
+    ),
     "factors/components.py": (
         "principal components extraction over the sleeve correlation matrix, with the retention rule "
         "measured rather than assumed"

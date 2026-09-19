@@ -1144,6 +1144,80 @@ print(f"annualisation {metrics.PERIODS_PER_YEAR} periods, sub-periods {[name for
             "qualify."
         ),
     },
+    {
+        "slug": "15-the-consumer-boundary",
+        "title": "The consumer boundary: the data contract and the five analytics entry points",
+        "entry": "portfolio_workbench.facade",
+        "drives": ("facade.py",),
+        "does": (
+            "The boundary is the whole of what a consumer of this engine adopts: the data contract it "
+            "satisfies, and the five entry points it then calls - factor exposures, risk models, "
+            "construction, evaluation, and attribution with the Euler risk budget. The module holds no "
+            "arithmetic of its own. It binds each entry point to the layer modules that do the work, so "
+            "the names a consumer imports are the modules this repository runs and not a second copy of "
+            "them, and its entry point prints that inventory rather than a report of results."
+        ),
+        "contract": (
+            "The contract is the engine's own, unchanged by the boundary: one row per instrument-month "
+            "carrying `period_month` and `available_from`, a manifest the loader verifies and fails "
+            "closed on, and the as-of rule that a bar becomes readable on the first day of the month "
+            "after the month it is labelled with. Nothing optional is added to it here, and no default "
+            "is applied on the consumer's behalf - the window, the universe, the policy weights and the "
+            "constraint set are this build's decisions for one panel and one mandate, so a consumer "
+            "with a different mandate passes its own frames and its own weights into the entry points "
+            "rather than inheriting these."
+        ),
+        "example_note": (
+            "The boundary has no arithmetic, so the identity worth checking is object identity: a group "
+            "member must be the layer's own module rather than a copy, which is what makes the promise "
+            "that a module moved inside a layer costs one edit here rather than an edit in every "
+            "consumer. The cell checks that, and checks that the groups are the five entry points and "
+            "the contract the module declares."
+        ),
+        "example": '''
+from portfolio_workbench import facade
+from portfolio_workbench.budget import euler
+from portfolio_workbench.risk import covariance
+
+declared = {"contract", "factor_exposures", "risk_models", "construction", "evaluation", "attribution"}
+assert {name for name, _ in facade.GROUPS} == declared
+
+# Identity, not equality: a copy of a module would be the second account of it that this design
+# exists to avoid.
+assert facade.attribution.euler is euler
+assert facade.risk_models.covariance is covariance
+assert facade.attribution.euler.__name__ == "portfolio_workbench.budget.euler"
+
+calls = sum(len(vars(group)) for _, group in facade.GROUPS)
+print(f"{len(facade.GROUPS)} groups carrying {calls} modules, version {facade.VERSION}")
+print("identity holds for every member: " + ", ".join(
+    f"{name} {len(vars(group))}" for name, group in facade.GROUPS))
+''',
+        "parameters": '''
+from portfolio_workbench import facade
+
+print(f"build version {facade.VERSION}, the revision the repository tags this commit at")
+print("entry points: " + ", ".join(name for name, _ in facade.GROUPS))
+print("no window, universe, policy weights or constraint set is applied by the boundary")
+''',
+        "reading": (
+            "The boundary is the surface a consumer pins: a revision tagged in this repository, with "
+            "the contract above it and five named entry points behind it. A reader must not read the "
+            "grouping as a completeness claim about portfolio methods - it is the order this build "
+            "exercises them in, and the risk budget sits inside the attribution group because the two "
+            "decompose the same realised series. A reader must not read the version constant as a "
+            "guarantee either: the repository tag pins the commit, and a consumer that imports the layer "
+            "modules directly rather than through these names has pinned nothing."
+        ),
+        "not_establish": (
+            "Nothing here establishes that a consumer satisfies the contract by importing this module: "
+            "the contract is a table shape, and whether another project's files carry it is decided by "
+            "its own run of the quality gate and by comparing its returns with the pandas path. Nothing "
+            "here establishes that the five groups are the five a different mandate needs, and nothing "
+            "here makes any claim about results - the numbers live in the modules behind these names, "
+            "each with its own notebook stating what it does not establish."
+        ),
+    },
 )
 
 
