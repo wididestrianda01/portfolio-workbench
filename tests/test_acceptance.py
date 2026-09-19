@@ -465,7 +465,7 @@ def test_the_consumer_boundary_carries_the_contract_and_the_five_entry_points():
             )
 
 
-def test_the_prose_deliverables_are_the_ones_the_code_writes():
+def test_the_prose_deliverables_are_the_ones_the_code_writes(tmp_path):
     """The memo and the record are generated, so the copies in the repository are read against the code.
 
     The drift this catches is silent, and it had happened: a sentence rewritten in the generator left
@@ -473,6 +473,11 @@ def test_the_prose_deliverables_are_the_ones_the_code_writes():
     `collect` makes is the one the documents are written from, so the comparison is byte for byte -
     the price is a second pass over the stack, which is what makes the published text a fact about the
     code rather than a file someone remembered to regenerate.
+
+    The writer's own path runs here too, on the same evidence, writing to a directory the fixture owns.
+    It writes both files before it prints, so a fault in the confirmation line leaves the published
+    documents correct and the entry point returning a failure - which is a fault only running the entry
+    point shows, and one this line shows without a third pass over the stack.
     """
     from reporting import memo as memo_module
 
@@ -480,6 +485,9 @@ def test_the_prose_deliverables_are_the_ones_the_code_writes():
     evidence = memo_module.collect()
     assert (root / "reporting" / "findings-memo.md").read_text() == memo_module.memo(evidence)
     assert (root / "reporting" / "decision-record.md").read_text() == memo_module.record(evidence)
+    written = memo_module.write(evidence, tmp_path / "memo.md", tmp_path / "record.md")
+    assert (tmp_path / "memo.md").read_text() == memo_module.memo(evidence)
+    assert written["record"].read_text() == memo_module.record(evidence)
 
 
 def test_every_method_is_traced_to_a_cited_source():
