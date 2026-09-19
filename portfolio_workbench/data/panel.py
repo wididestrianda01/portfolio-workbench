@@ -149,38 +149,47 @@ def currency_split(prices, fx, value="adj_close"):
     return {name: sleeve_order(frame) for name, frame in frames.items()}
 
 
-def eur_excess_returns(prices, fx, risk_free, value="adj_close"):
-    """The sleeve frame every factor result is measured on: EUR total returns in excess of the
-    euro overnight rate.
+def excess(euro, risk_free):
+    """The euro leg in excess of the euro overnight rate, on one calendar.
 
-    Three things this has a quiet wrong version of. The return is the feed's adjusted close
-    ratio, so it is already a total return in the instrument's own denomination, and the
-    translation into euro is the split `currency_split` performs - one definition, so the frame
-    the factors are fitted on and the frame the attribution decomposes cannot disagree about
-    what a translation is. The cash rate is subtracted, because every factor in the model is an
-    excess return or a spread and a left-hand side measured gross would carry the cash rate into
-    the intercept. And the month the panel's first bar cannot produce is dropped as a structural
-    absence while any other missing month is refused: a filled zero is a fabricated observation,
-    and it would enter every window containing it.
+    Named separately from `eur_excess_returns` because the loader splits one snapshot once and needs
+    both the legs and the excess frame: recomputing the split for the second of them would be the same
+    arithmetic twice, and a caller that rebuilt the euro leg from the other two would be reconstructing
+    the input of the decomposition it is meant to check.
+
+    The cash rate is subtracted, because every factor in the model is an excess return or a spread and
+    a left-hand side measured gross would carry the cash rate into the intercept. The month the panel's
+    first bar cannot produce is dropped as a structural absence while any other missing month is
+    refused: a filled zero is a fabricated observation, and it would enter every window containing it.
     """
-    returns = currency_split(prices, fx, value=value)["euro"]
-
     rate = risk_free.copy()
     # The split's frames are labelled with the month itself, so the cash rate is put on the same
     # calendar rather than the return frame being moved onto the rate's: one representation, no
     # timestamp round-trip in the middle of a subtraction.
     rate.index = pd.PeriodIndex(rate.index, freq="M")
-    rate = rate.reindex(returns.index)
+    rate = rate.reindex(euro.index)
     if rate.isna().any():
         raise ValueError(f"the risk-free series does not cover {list(rate.index[rate.isna()][:3])}")
-    excess = returns.sub(rate, axis=0)
+    frame = euro.sub(rate, axis=0)
 
-    uncomputed = excess.index[excess.isna().any(axis=1)]
-    structural = len(uncomputed) == 1 and uncomputed[0] == excess.index[0]
+    uncomputed = frame.index[frame.isna().any(axis=1)]
+    structural = len(uncomputed) == 1 and uncomputed[0] == frame.index[0]
     if len(uncomputed) and not structural:
         raise ValueError(f"the return frame holds months it cannot compute: {list(uncomputed[:3])}")
-    excess = excess.loc[~excess.isna().any(axis=1)]
-    return sleeve_order(excess)
+    frame = frame.loc[~frame.isna().any(axis=1)]
+    return sleeve_order(frame)
+
+
+def eur_excess_returns(prices, fx, risk_free, value="adj_close"):
+    """The sleeve frame every factor result is measured on: EUR total returns in excess of the
+    euro overnight rate.
+
+    The translation into euro is the split `currency_split` performs - one definition, so the frame the
+    factors are fitted on and the frame the attribution decomposes cannot disagree about what a
+    translation is - and the excess is then `excess`'s own arithmetic rather than a second statement of
+    it here.
+    """
+    return excess(currency_split(prices, fx, value=value)["euro"], risk_free)
 
 
 def joined_months(price_months, factor_months, risk_free_months):

@@ -49,7 +49,7 @@ why shares of variance are what the report prints.
 import numpy as np
 import pandas as pd
 
-from ..data import loader, panel
+from ..data import loader
 from . import spine as spine_module
 
 WINDOW = 60
@@ -460,18 +460,18 @@ def _identity_line(sleeve, loadings, block):
 
 def main(root=None):
     document = loader.load_panel(root)
-    months = document["months"]
-    returns = panel.eur_excess_returns(document["prices"], document["fx"], document["risk_free"]["monthly"])
+    months = document.months
+    returns = document.returns
     block = spine_module.constructed_block(returns)
-    named = spine_module.named_set(document["factors"]["eur"], block)
-    quoted = spine_module.named_set(document["factors"]["usd"], block)
+    named = spine_module.named_set(document.factors.eur, block)
+    quoted = spine_module.named_set(document.factors.usd, block)
     europe = spine_module.named_set(spine_module.cross_check(document), block)
 
     fit = rolling(returns, named, months)
     determined = fit["determined"][-1]
     estimated = fit["estimated"][-1]
     traded = fit["traded"]
-    print(f"[factor] snapshot {document['snapshot_id']}, {len(named.columns)} factors, {len(traded)} refits "
+    print(f"[factor] snapshot {document.snapshot_id}, {len(named.columns)} factors, {len(traded)} refits "
           f"{traded.min()}..{traded.max()} on the panel calendar {months.min()}..{months.max()}")
     print(f"[factor] window {WINDOW} month labels ending the month before the traded month; the first window "
           f"{fit['window_first'][0]}..{fit['window_last'][0]} carries {fit['n_obs'][0]} observations (the "
@@ -555,7 +555,7 @@ def main(root=None):
           f"euro leg: mean |alpha| {europe_fit['alpha'][estimated].abs().mean().mean():.4%}/month against "
           f"{fit['alpha'][estimated].abs().mean().mean():.4%} on the Developed spine, both in euro - a different "
           f"regional cut carried beside the headline, never merged into it")
-    for line in document["warnings"]:
+    for line in document.warnings:
         print(f"[factor] {line}")
     return {"eur": fit, "quoted": quoted_fit, "europe": europe_fit, "returns": returns, "named": named,
             "estimated": estimated, "determined": determined}

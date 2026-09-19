@@ -94,37 +94,37 @@ def test_the_joined_panel_holds_the_declared_shape_and_the_as_of_rule(frozen):
     loader is the only way in, so a bar the reader could not have seen is absent rather than refused by
     a later filter."""
     document = loader.load_panel(frozen)
-    prices = document["prices"]
+    prices = document.prices
 
     assert prices["instrument"].nunique() == 11
     assert prices["period_month"].nunique() == 192
-    assert len(document["months"]) == 191, "the factor leg costs one month"
-    assert str(document["months"].min()) == "2010-09"
-    assert str(document["months"].max()) == "2026-07"
-    assert document["snapshot_id"] == "2026-09-13"
+    assert len(document.months) == 191, "the factor leg costs one month"
+    assert str(document.months.min()) == "2010-09"
+    assert str(document.months.max()) == "2026-07"
+    assert document.snapshot_id == "2026-09-13"
     assert prices["available_from"].dt.to_period("M").eq(prices["period_month"].dt.to_period("M") + 1).all()
     assert set(prices["currency"]) == {"EUR", "SEK"}
 
     view = loader.load_panel(frozen, as_of="2026-08-31")
-    seen = set(view["prices"]["period_month"].dt.strftime("%Y-%m"))
+    seen = set(view.prices["period_month"].dt.strftime("%Y-%m"))
     assert "2026-08" not in seen, "August's bar is not available during August"
-    assert str(view["months"].max()) == "2026-07"
+    assert str(view.months.max()) == "2026-07"
 
     later = loader.load_panel(frozen, as_of="2026-09-01")
-    assert "2026-08" in set(later["prices"]["period_month"].dt.strftime("%Y-%m"))
+    assert "2026-08" in set(later.prices["period_month"].dt.strftime("%Y-%m"))
 
     # Every leg is gated, not only the price frame. The factor and rate legs carry no
     # `available_from` column, so a filter that only touched the panel would hand a reader
     # standing in 2016 the 2026 factor library and an accrued rate for a month that has not
     # happened - and the availability rule is documented as the only read path.
     earlier = loader.load_panel(frozen, as_of="2016-01-31")
-    assert str(earlier["months"].max()) == "2015-12"
-    assert earlier["factors"]["usd"].index.max() == pd.Period("2015-12", freq="M")
-    assert earlier["factors"]["eur"].index.max() == pd.Period("2015-12", freq="M")
-    assert earlier["factors"]["europe_usd"].index.max() == pd.Period("2015-12", freq="M")
-    assert earlier["factors"]["fx_level"].index.max() == pd.Period("2015-12", freq="M")
-    assert earlier["risk_free"]["monthly"].index.max() == pd.Period("2015-12", freq="M")
-    assert earlier["risk_free"]["daily"].index.max() <= pd.Timestamp("2016-01-31")
+    assert str(earlier.months.max()) == "2015-12"
+    assert earlier.factors.usd.index.max() == pd.Period("2015-12", freq="M")
+    assert earlier.factors.eur.index.max() == pd.Period("2015-12", freq="M")
+    assert earlier.factors.europe_usd.index.max() == pd.Period("2015-12", freq="M")
+    assert earlier.factors.fx_level.index.max() == pd.Period("2015-12", freq="M")
+    assert earlier.risk_free.monthly.index.max() == pd.Period("2015-12", freq="M")
+    assert earlier.risk_free.daily.index.max() <= pd.Timestamp("2016-01-31")
 
 
 @pytest.mark.parametrize(
@@ -239,9 +239,9 @@ def test_the_fx_legs_are_the_one_exemption_from_the_issuer_facts(frozen):
     """A level is not a fund, so the quoted-series map grants the exemption rather than the line's
     absence from the manifest doing it. Every priced line is described, which is what lets the gate
     read a policy and a size for each of them."""
-    document = manifest.read(frozen)
-    priced = {entry["instrument"] for entry in document["files"] if entry["role"] == "price"}
-    assert priced == set(document["instruments"]) == set(universe.TICKERS)
+    snapshot = manifest.read(frozen)
+    priced = {entry["instrument"] for entry in snapshot["files"] if entry["role"] == "price"}
+    assert priced == set(snapshot["instruments"]) == set(universe.TICKERS)
     assert not priced & set(universe.FX_QUOTES)
     assert quality.issuer_facts({}, "EURUSD=X") is None
 
@@ -297,7 +297,7 @@ def test_each_warning_prints_beside_the_value_it_qualifies(frozen):
     )
     assert len(trim) == 1 and "factor month trims the panel" in trim[0] and "2 price months" in trim[0]
 
-    warnings = loader.load_panel(frozen)["warnings"]
+    warnings = loader.load_panel(frozen).warnings
     assert any("thin liquidity" in line and "IBGL.AS" in line for line in warnings)
     assert any("liquidity not screened" in line and "IMEU.AS" in line for line in warnings)
 
@@ -307,10 +307,10 @@ def test_the_manifest_records_the_vintage_and_the_currency_of_every_leg(frozen, 
     than recovered by each load, and every leg carries the currency its instrument is quoted in,
     which is the label another project reads to satisfy the table contract. Both are re-derived on
     verify, so a manifest that overstates either is refused rather than believed."""
-    document = manifest.read(frozen)
-    factors = [entry for entry in document["files"] if entry["role"] == "factor"]
+    snapshot = manifest.read(frozen)
+    factors = [entry for entry in snapshot["files"] if entry["role"] == "factor"]
     assert factors and all(str(SEED) in entry["vintage"] for entry in factors), "the stamp is recorded"
-    assert {e["instrument"]: e["currency"] for e in document["files"] if e["role"] == "fx"} == universe.FX_QUOTES
+    assert {e["instrument"]: e["currency"] for e in snapshot["files"] if e["role"] == "fx"} == universe.FX_QUOTES
 
     copy = snapshot_copy(frozen, tmp_path)
     loader.load_panel(copy)
@@ -329,10 +329,10 @@ def test_the_external_legs_are_read_as_the_publishers_write_them(frozen, tmp_pat
     the currency leg divides rather than multiplies. On the fixture the reference rate is flat, so the
     translated spine has to equal the quoted one exactly: a currency level reaching the translation
     instead scales every quote by the rate itself, which reads as a frame of hundred-percent months."""
-    factors = loader.load_panel(frozen)["factors"]
-    assert factors["fx_level"].nunique() == 1, "the fixture holds the reference rate flat"
-    assert len(factors["eur"]) > 100
-    pd.testing.assert_frame_equal(factors["eur"], factors["usd"].loc[factors["eur"].index])
+    factors = loader.load_panel(frozen).factors
+    assert factors.fx_level.nunique() == 1, "the fixture holds the reference rate flat"
+    assert len(factors.eur) > 100
+    pd.testing.assert_frame_equal(factors.eur, factors.usd.loc[factors.eur.index])
 
     frame = pd.DataFrame(
         [[0.5, 0.1, -0.2, 0.0, 0.1]] * 12,
@@ -399,14 +399,14 @@ def test_the_excess_frame_translates_the_foreign_line_and_subtracts_the_cash_rat
     the one line quoted in another currency is translated by dividing by its own currency leg, and the
     frame comes back in the sleeve map's order, which every weight vector is indexed by."""
     document = loader.load_panel(frozen)
-    prices, fx = document["prices"], document["fx"]
-    excess = panel.eur_excess_returns(prices, fx, document["risk_free"]["monthly"])
+    prices, fx = document.prices, document.fx
+    excess = panel.eur_excess_returns(prices, fx, document.risk_free.monthly)
 
     local = panel.total_return(panel.wide(prices, "adj_close")).iloc[1:]
     fx_returns = panel.total_return(panel.wide(fx, "close")).iloc[1:]
     translated = local.copy()
     translated["XACT-NORDEN.ST"] = (1.0 + local["XACT-NORDEN.ST"]) / (1.0 + fx_returns["EURSEK=X"]) - 1.0
-    rate = document["risk_free"]["monthly"]
+    rate = document.risk_free.monthly
     rate.index = rate.index.to_timestamp(how="start")
     expected = translated.sub(rate.reindex(local.index), axis=0)
     expected.index = pd.PeriodIndex(expected.index, freq="M")

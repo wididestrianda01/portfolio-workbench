@@ -46,7 +46,7 @@ import numpy as np
 import pandas as pd
 
 from ..construct import constraints, families, means
-from ..data import loader, panel, universe
+from ..data import loader, universe
 from ..evaluate import walkforward
 from ..factors import exposures
 from ..risk import covariance as covariance_module
@@ -255,8 +255,8 @@ def run_cell(spec, returns, months, cache=None):
 
 def run_grid(document, specs=None, cache=None):
     """Every declared run in registry order, with a run that cannot fill its row recorded as a cut."""
-    returns = panel.eur_excess_returns(document["prices"], document["fx"], document["risk_free"]["monthly"])
-    months = document["months"]
+    returns = document.returns
+    months = document.months
     cache = {} if cache is None else cache
     results, cuts = [], []
     for spec in registry.RUNS if specs is None else specs:
@@ -278,8 +278,8 @@ def manifest(result, document):
     return {
         "cell": spec["id"],
         "stage": spec["stage"],
-        "snapshot": document["snapshot_id"],
-        "as_of": str(document["as_of"]),
+        "snapshot": document.snapshot_id,
+        "as_of": str(document.as_of),
         "protocol": {
             "kind": spec["protocol"],
             "window_months": exposures.WINDOW,
@@ -363,7 +363,7 @@ def write_manifests(document, results, root=None):
     keyed by snapshot id is also what makes a rerun against a different snapshot visible rather than
     silently comparable.
     """
-    directory = Path(root) if root is not None else DEFAULT_RUN_ROOT / document["snapshot_id"]
+    directory = Path(root) if root is not None else DEFAULT_RUN_ROOT / document.snapshot_id
     directory.mkdir(parents=True, exist_ok=True)
     written = []
     for result in results:
@@ -375,7 +375,7 @@ def write_manifests(document, results, root=None):
 
 def report(grid, document):
     """The grid's own summary: one line per run, the diagnostics beneath it, then the table."""
-    print(f"[construct] snapshot {document['snapshot_id']}; {len(registry.CELLS)} cells, "
+    print(f"[construct] snapshot {document.snapshot_id}; {len(registry.CELLS)} cells, "
           f"{len(registry.PRIMARY)} runs on the primary protocol, {registry.PRE_REGISTERED} pre-registered")
     print(f"[construct] constraint set: long-only, fully invested, cap {constraints.CAP:.0%}, band "
           f"{constraints.BAND:.0%} per sleeve, one-way turnover cap {constraints.TURNOVER_CAP:.0%} per measured "

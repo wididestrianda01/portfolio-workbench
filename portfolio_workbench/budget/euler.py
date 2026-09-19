@@ -260,7 +260,7 @@ def report(cells, document, policy, default=None):
     """The budget report: consumption against the declared vector, per run, with the condition checked
     numerically and the refused measure's failing case printed beside it."""
     months = cells[0]["contributions"]["shares"].index
-    print(f"[risk] snapshot {document['snapshot_id']}: the budget is read over {len(months)} out-of-sample "
+    print(f"[risk] snapshot {document.snapshot_id}: the budget is read over {len(months)} out-of-sample "
           f"months {months.min()}..{months.max()}, one covariance held across the run")
     print(f"[risk] the declared vector is fixed in the data layer before construction: "
           f"{', '.join(f'{group} {share:.0%}' for group, share in universe.RISK_BUDGET.items())} of total "
@@ -326,7 +326,7 @@ def main(root=None):
     report(cells, analysis.document, policy, default=heaviest)
     for cut in analysis.grid["cuts"]:
         print(f"[risk] {cut['id']}: cut from the grid, so it carries no budget: {cut['reason']}")
-    for line in analysis.document["warnings"]:
+    for line in analysis.document.warnings:
         print(f"[risk] {line}")
     return {"cells": cells, "policy": policy, "covariance": analysis.covariance, "grid": analysis.grid}
 

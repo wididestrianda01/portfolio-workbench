@@ -69,10 +69,10 @@ PROVENANCE_CODE = '''
 from portfolio_workbench.data import loader, universe
 
 document = loader.load_panel()
-months = document["months"]
-print(f"snapshot {document['snapshot_id']}, taken as of {document['as_of']}")
+months = document.months
+print(f"snapshot {document.snapshot_id}, taken as of {document.as_of}")
 print(f"panel {len(months)} months {months.min()}..{months.max()} across {len(universe.TICKERS)} sleeves")
-print("manifest fields: " + ", ".join(sorted(document["manifest"])))
+print("manifest fields: " + ", ".join(sorted(document.manifest)))
 '''
 
 # The cell that runs the entry point, exactly as the repository's own instructions run it.

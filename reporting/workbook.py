@@ -104,11 +104,11 @@ def main(document=None, path=None):
 
     analysis = study.analyse(loader.load_panel() if document is None else document)
     if path is None:
-        path = DEFAULT_OUTPUT_ROOT / analysis.document["snapshot_id"] / "comparison.xlsx"
+        path = DEFAULT_OUTPUT_ROOT / analysis.document.snapshot_id / "comparison.xlsx"
     target = write(analysis.sheet, analysis.document, path)
     print(
         f"[table] workbook written to {target}: {len(table_module.block_tables(analysis.sheet))} blocks, each "
-        f"sheet carrying the snapshot {analysis.document['snapshot_id']}, the protocol and the cost multiple"
+        f"sheet carrying the snapshot {analysis.document.snapshot_id}, the protocol and the cost multiple"
     )
     return target
 

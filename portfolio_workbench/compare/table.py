@@ -297,7 +297,7 @@ def provenance(sheet, document):
     """
     sensitivity = sorted(sheet["rows"][0]["cost_sensitivity"])
     return {
-        "snapshot": document["snapshot_id"],
+        "snapshot": document.snapshot_id,
         "protocol": protocol(),
         "runs": f"{len(sheet['rows'])} pre-registered runs, {len(sheet['cells'])} distinct cells",
         "months traded": f"{sheet['rows'][0]['months']} out-of-sample months, monthly refit",

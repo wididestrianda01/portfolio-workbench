@@ -37,7 +37,7 @@ with the panel it was computed on, and no result may describe it as "the number 
 import numpy as np
 import pandas as pd
 
-from ..data import loader, panel
+from ..data import loader
 from . import spine as spine_module
 from .exposures import WINDOW, window_block, windows
 
@@ -320,13 +320,13 @@ def _component_names(loadings, sleeve_names, count):
 
 def main(root=None):
     document = loader.load_panel(root)
-    months = document["months"]
-    returns = panel.eur_excess_returns(document["prices"], document["fx"], document["risk_free"]["monthly"])
-    named = spine_module.named_set(document["factors"]["eur"], spine_module.constructed_block(returns))
+    months = document.months
+    returns = document.returns
+    named = spine_module.named_set(document.factors.eur, spine_module.constructed_block(returns))
 
     full = decompose(returns, components=None)
     count = full["components"]
-    print(f"[factor] snapshot {document['snapshot_id']}, {returns.shape[0]} returns × {returns.shape[1]} sleeves")
+    print(f"[factor] snapshot {document.snapshot_id}, {returns.shape[0]} returns × {returns.shape[1]} sleeves")
     print(f"[factor] full panel: Marchenko-Pastur edge {mp_edge(returns.shape[1], returns.shape[0]):.4f}, "
           f"permutation null 95th percentile of the top eigenvalue {full['threshold'][0]:.4f}, observed top "
           f"{full['eigenvalues'][0]:.3f}; the matched null sits above the analytic edge, which is what keeping "
@@ -366,7 +366,7 @@ def main(root=None):
           "which is about variance.")
     print(f"[factor] a panel this short undercounts the directions a longer sample would support, so {count} is "
           f"this panel's usable dimension over {returns.shape[0]} months, never the number of factors in the market")
-    for line in document["warnings"]:
+    for line in document.warnings:
         print(f"[factor] {line}")
     return {"full": full, "series": series, "stability": stable, "returns": returns, "named": named}
 

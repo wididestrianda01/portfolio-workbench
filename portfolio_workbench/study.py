@@ -37,7 +37,7 @@ from .attribute import brinson
 from .budget import euler
 from .compare import grid as grid_module
 from .compare import table as table_module
-from .data import loader, panel
+from .data import loader
 from .evaluate import metrics
 from .risk import covariance as covariance_module
 
@@ -111,7 +111,7 @@ def analyse(document, grid=None):
     window = returns.reindex(traded)
     covariance = covariance_module.sample(window)
     policy = grid_module.policy_weights(returns.columns)
-    split = panel.currency_split(document["prices"], document["fx"])
+    split = document.split
     return SimpleNamespace(
         document=document,
         returns=returns,
@@ -123,7 +123,7 @@ def analyse(document, grid=None):
         attribution={
             result["id"]: {
                 **brinson.decompose(
-                    result["weights"], policy, split, document["risk_free"]["monthly"], net=result["net"]
+                    result["weights"], policy, split, document.risk_free.monthly, net=result["net"]
                 ),
                 "id": result["id"],
             }
@@ -154,7 +154,7 @@ def main(root=None):
     print(f"[table] readings: {len(analysis.sheet['rows'])} table rows over "
           f"{len(analysis.sheet['cells'])} distinct cells, {len(analysis.attribution)} attributed books, "
           f"{len(analysis.budgets)} budgeted books")
-    for line in analysis.document["warnings"]:
+    for line in analysis.document.warnings:
         print(f"[table] {line}")
     return analysis
 

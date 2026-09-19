@@ -370,7 +370,7 @@ def report(cells, document, count=6):
     """The attribution's own report: every cell's linked lines, the leader's sleeves, the currency and
     the cost, each beside the residual that says whether it reconciles."""
     months = cells[0]["months"]
-    print(f"[attrib] snapshot {document['snapshot_id']}: {len(cells)} runs, {months.min()}..{months.max()} "
+    print(f"[attrib] snapshot {document.snapshot_id}: {len(cells)} runs, {months.min()}..{months.max()} "
           f"({len(months)} months)")
     print(f"[attrib] {BRINSON_FACHLER}, arithmetic; {CARINO} reported, {MENCHERO} as the cross-check")
     print(f"[attrib] allocation is measured on LOCAL-currency returns, so selection here is absent by "
@@ -420,7 +420,7 @@ def main(root=None):
     report(cells, analysis.document)
     for cut in analysis.grid["cuts"]:
         print(f"[attrib] {cut['id']}: cut from the grid, so there is nothing to attribute: {cut['reason']}")
-    for line in analysis.document["warnings"]:
+    for line in analysis.document.warnings:
         print(f"[attrib] {line}")
     return {"cells": cells, "analysis": analysis}
 

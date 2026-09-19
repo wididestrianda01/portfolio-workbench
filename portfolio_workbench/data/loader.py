@@ -2,9 +2,21 @@
 
 The loader is the only way into the panel: it verifies the manifest, parses each file
 into the long table the rest of the package consumes, runs the quality gate, and hands
-back the joined legs. Anything reading a snapshot file directly bypasses the check,
-which is why the fetch script writes its manifest through `manifest.describe` rather
-than by hand.
+back the joined legs as one named document. Anything reading a snapshot file directly
+bypasses the check, which is why the fetch script writes its manifest through
+`manifest.describe` rather than by hand.
+
+**The document is the seam, so its members are names rather than keys.** Every consumer used to
+reach into a bare dict - eighty-nine key reads across thirteen modules, with the same three keys
+re-typed into `panel.eur_excess_returns` at eleven of them - and a key renamed here surfaced as a
+`KeyError` in whichever report ran first rather than as a failed check. The document also carries
+the analytics frames derived from the legs (`returns`, `split`), because the loader is the one
+place that holds every leg at once and the frame eleven call sites each rebuilt is a frame eleven
+call sites can rebuild differently.
+
+**The manifest is a document of its own, and is not namespaced here.** It mirrors the file the
+snapshot ships, with the keys `data/manifest.py` measures and verifies, and it travels as the
+mapping it is read as.
 
 The long table is the data contract: one row per instrument-month, carrying
 `period_month`, `available_from`, the unadjusted close, the feed's adjusted close and the
@@ -13,6 +25,7 @@ distribution. It is what another project would have to satisfy to consume this e
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 
@@ -65,23 +78,23 @@ def _read_frame(root, entry, required, kind):
     return frame[list(LONG_COLUMNS) + ["kind"]]
 
 
-def _load_role(root, document, role, required, kind):
+def _load_role(root, snapshot, role, required, kind):
     frames = [
-        _read_frame(root, entry, required, kind) for entry in document["files"] if entry.get("role") == role
+        _read_frame(root, entry, required, kind) for entry in snapshot["files"] if entry.get("role") == role
     ]
     if not frames:
         raise quality.DataStop("missing file", f"the snapshot carries no file with role '{role}'")
     return pd.concat(frames, ignore_index=True)
 
 
-def _role_path(document, role):
-    for entry in document["files"]:
+def _role_path(snapshot, role):
+    for entry in snapshot["files"]:
         if entry.get("role") == role:
             return entry["path"]
     raise quality.DataStop("missing file", f"the snapshot carries no file with role '{role}'")
 
 
-def load_factors(root, document):
+def load_factors(root, snapshot):
     """The fundamental spine, quoted and euro-translated, with the FX level behind it.
 
     The verified manifest is passed in rather than re-derived: the whole snapshot is
@@ -90,7 +103,7 @@ def load_factors(root, document):
     """
     frames = {
         entry["path"]: Path(root) / entry["path"]
-        for entry in document["files"]
+        for entry in snapshot["files"]
         if entry.get("role") == "factor"
     }
     if len(frames) < 2:
@@ -109,7 +122,7 @@ def load_factors(root, document):
         momentum = momentum.rename(columns={"WML": "MOM"})
     usd = developed.join(momentum, how="inner")
 
-    eurusd_daily = external.read_ecb_csv(Path(root) / _role_path(document, "ecb_eurusd"))
+    eurusd_daily = external.read_ecb_csv(Path(root) / _role_path(snapshot, "ecb_eurusd"))
     fx_level = external.monthly_last(eurusd_daily)
     # The translation takes the currency leg as a RETURN, never as the quoted rate:
     # `monthly_last` returns the level a position is valued at, and a level reaching a
@@ -131,10 +144,10 @@ def load_factors(root, document):
     }
 
 
-def load_risk_free(root, document):
+def load_risk_free(root, snapshot):
     """The overnight rate, spliced and accrued into monthly returns, with the basis."""
-    eonia = external.read_ecb_csv(Path(root) / _role_path(document, "ecb_eonia"))
-    estr = external.read_ecb_csv(Path(root) / _role_path(document, "ecb_estr"))
+    eonia = external.read_ecb_csv(Path(root) / _role_path(snapshot, "ecb_eonia"))
+    estr = external.read_ecb_csv(Path(root) / _role_path(snapshot, "ecb_estr"))
     daily, basis_bp, overlap = external.splice_risk_free(eonia, estr)
     return {
         "daily": daily,
@@ -164,7 +177,7 @@ def _rates(fx):
 
 
 def load_panel(root=None, as_of=None):
-    """Every leg, verified and gated, ready for the analytics.
+    """Every leg, verified and gated, ready for the analytics, as one named document.
 
     `as_of` is a reader's moment, and the legs come back as that reader could have seen
     them: the availability rule is enforced by the loader rather than left to every caller
@@ -174,19 +187,23 @@ def load_panel(root=None, as_of=None):
 
     Warnings travel with the panel rather than being printed here, so that whichever
     module reports a number prints the qualification beside that number.
+
+    The manifest is held under `manifest` as the mapping it was read as, and the facts it
+    describes are named beside it rather than reached for through it, because a leg that
+    has to be found by key before it can be used is a leg no signature checks.
     """
     root = snapshot_root(root)
-    document = manifest.verify(root)
-    taken = document["created"]
+    snapshot = manifest.verify(root)
+    taken = snapshot["created"]
 
-    prices = _load_role(root, document, "price", REQUIRED_PRICE_COLUMNS, "price")
-    fx = _load_role(root, document, "fx", REQUIRED_FX_COLUMNS, "fx")
+    prices = _load_role(root, snapshot, "price", REQUIRED_PRICE_COLUMNS, "price")
+    fx = _load_role(root, snapshot, "fx", REQUIRED_FX_COLUMNS, "fx")
     # Read rather than defaulted: `verify` has refused any manifest without them, and an empty
     # mapping here would turn the dividend-blind stop and the liquidity floor into rules that
     # cannot fire, which is the failure the gate exists to prevent rather than to reproduce.
-    facts = document["instruments"]
-    factors = load_factors(root, document)
-    risk_free = load_risk_free(root, document)
+    facts = snapshot["instruments"]
+    factors = load_factors(root, snapshot)
+    risk_free = load_risk_free(root, snapshot)
 
     # The gate runs on the panel as the snapshot holds it, before the declared window
     # trims anything: a bar that should never have been fetched is a fetch fault, and
@@ -223,16 +240,22 @@ def load_panel(root=None, as_of=None):
         factors["eur"].index,
         risk_free["monthly"].index,
     )
-    return {
-        "snapshot_id": document["snapshot_id"],
-        "manifest": document,
-        "facts": facts,
-        "prices": prices,
-        "fx": fx,
-        "factors": factors,
-        "risk_free": risk_free,
-        "months": months,
-        "warnings": warnings,
-        "dropped": {"prices": dropped_prices, "fx": dropped_fx},
-        "as_of": as_of if as_of is not None else taken,
-    }
+    # Derived once, here, rather than at each caller: the frame was rebuilt at eleven call sites from
+    # the same three legs, and the split the attribution decomposes was recomputed at the four that
+    # also needed it.
+    split = panel.currency_split(prices, fx)
+    return SimpleNamespace(
+        snapshot_id=snapshot["snapshot_id"],
+        manifest=snapshot,
+        facts=facts,
+        prices=prices,
+        fx=fx,
+        factors=SimpleNamespace(**factors),
+        risk_free=SimpleNamespace(**risk_free),
+        months=months,
+        warnings=warnings,
+        dropped=SimpleNamespace(prices=dropped_prices, fx=dropped_fx),
+        as_of=as_of if as_of is not None else taken,
+        returns=panel.excess(split["euro"], risk_free["monthly"]),
+        split=split,
+    )

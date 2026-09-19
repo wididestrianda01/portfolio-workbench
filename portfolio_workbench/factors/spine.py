@@ -21,7 +21,7 @@ excess return.
 
 import pandas as pd
 
-from ..data import external, loader, panel
+from ..data import external, loader
 
 # Every sleeve the block reads, in one place: the guard and the arithmetic below have to agree
 # about which instruments the block is built from, so adding a leg edits one tuple.
@@ -88,23 +88,21 @@ def cross_check(document):
     headline uses, rather than leaving the cross-check in the currency the file happens to quote:
     a cross-check that silently changed the currency basis would confound region with translation.
     """
-    europe = document["factors"]["europe_usd"]
+    europe = document.factors.europe_usd
     factors = europe[[column for column in europe.columns if column not in NOT_A_FACTOR]]
-    fx_returns = external.monthly_returns(document["factors"]["fx_level"])
+    fx_returns = external.monthly_returns(document.factors.fx_level)
     covered = factors.index.intersection(fx_returns.index)
     return external.eur_translate(factors.loc[covered], fx_returns)
 
 
 def main(root=None):
     document = loader.load_panel(root)
-    returns = panel.eur_excess_returns(
-        document["prices"], document["fx"], document["risk_free"]["monthly"]
-    )
+    returns = document.returns
     block = constructed_block(returns)
-    spine = document["factors"]["eur"]
+    spine = document.factors.eur
     named = named_set(spine, block)
 
-    print(f"[factor] snapshot {document['snapshot_id']}, sleeves in the map's order")
+    print(f"[factor] snapshot {document.snapshot_id}, sleeves in the map's order")
     print(f"[factor] sleeve frame {returns.shape[0]} months × {returns.shape[1]} sleeves, EUR total "
           f"returns less the overnight rate, {returns.index.min()}..{returns.index.max()}")
     print(f"[factor] published spine {spine.shape[0]} months × {spine.shape[1]} columns "
@@ -122,7 +120,7 @@ def main(root=None):
           f"{', '.join(named.columns)}")
     print("[factor] the block is declared constructed: it is not vendor-supplied, and the spine that "
           "is published says nothing about bonds, credit or the term structure")
-    for line in document["warnings"]:
+    for line in document.warnings:
         print(f"[factor] {line}")
     return {"returns": returns, "block": block, "spine": spine, "named": named, "document": document}
 

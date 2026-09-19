@@ -116,10 +116,10 @@ RETURN_TOLERANCE = 1e-10
 def connection(root=None):
     """A DuckDB connection with one view per leg, and the snapshot's manifest beside it."""
     directory = loader.snapshot_root(root)
-    document = manifest.read(directory)
+    snapshot = manifest.read(directory)
     con = duckdb.connect()
     views = {}
-    for position, entry in enumerate(document["files"]):
+    for position, entry in enumerate(snapshot["files"]):
         role = entry.get("role")
         path = (directory / entry["path"]).as_posix()
         if role in CASH_VIEWS:
@@ -137,10 +137,10 @@ def connection(root=None):
             f"'{entry.get('currency', 'EUR')}' AS currency, * FROM read_csv_auto('{path}')"
         )
         views[name] = entry["instrument"]
-    absent = sorted(role for role in CASH_VIEWS if role not in {entry.get("role") for entry in document["files"]})
+    absent = sorted(role for role in CASH_VIEWS if role not in {entry.get("role") for entry in snapshot["files"]})
     if absent:
         raise ValueError(f"the snapshot carries no {' or '.join(absent)} leg, so the cash rate cannot be accrued")
-    return con, document, views
+    return con, snapshot, views
 
 
 def as_of(con, views, when):
@@ -189,8 +189,8 @@ def agreement(document, report, root=None):
     contract that disagree mean one of them is wrong about the panel every result is keyed to.
     """
     con, _, views = connection(root)
-    queried = {row["instrument"]: row for _, row in coverage(con, views, when=document["as_of"]).iterrows()}
-    carried = panel.coverage_months(document["prices"])
+    queried = {row["instrument"]: row for _, row in coverage(con, views, when=document.as_of).iterrows()}
+    carried = panel.coverage_months(document.prices)
     differences = []
     for instrument, block in carried.items():
         row = queried.get(instrument)
@@ -221,7 +221,7 @@ def returns(con, views, document, when=None):
     the left-hand side of the factor model is an excess return in the statement as well as in the
     dataframe.
     """
-    moment = document["as_of"] if when is None else when
+    moment = document.as_of if when is None else when
 
     def legs(role):
         names = [name for name in sorted(views) if name.startswith(f"{role}_")]
@@ -251,7 +251,7 @@ def returns_agreement(document, queried):
     two paths compound a month's rate in a different order, and a difference above it is not
     rounding.
     """
-    frame = panel.eur_excess_returns(document["prices"], document["fx"], document["risk_free"]["monthly"])
+    frame = document.returns
     wide = queried.assign(month=pd.PeriodIndex(queried["period_month"], freq="M")).pivot(
         index="month", columns="instrument", values="excess_return"
     )
@@ -286,10 +286,10 @@ def main(root=None):
     """Print the query's coverage beside the loader's, and whether the two statements agree."""
     document = loader.load_panel(root)
     con, _, views = connection(root)
-    report = coverage(con, views, when=document["as_of"])
-    joined = document["months"]
-    print(f"[data] snapshot {document['snapshot_id']}, taken as of {document['as_of']}")
-    print(f"[data] the as-of join in SQL: {len(as_of(con, views, document['as_of']))} instrument-days visible")
+    report = coverage(con, views, when=document.as_of)
+    joined = document.months
+    print(f"[data] snapshot {document.snapshot_id}, taken as of {document.as_of}")
+    print(f"[data] the as-of join in SQL: {len(as_of(con, views, document.as_of))} instrument-days visible")
     print(f"[data] {'instrument':<18s}{'first':>9s}{'last':>9s}{'months':>8s}{'visible':>9s}")
     for _, row in report.iterrows():
         print(

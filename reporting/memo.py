@@ -66,7 +66,7 @@ def collect(root=None):
     analysis = study.analyse(loader.load_panel(root))
     document, returns, months = analysis.document, analysis.returns, analysis.months
     block = spine_module.constructed_block(returns)
-    named = spine_module.named_set(document["factors"]["eur"], block)
+    named = spine_module.named_set(document.factors.eur, block)
     headline = components_module.decompose(returns)
     return {
         "analysis": analysis,
@@ -157,9 +157,9 @@ def memo(evidence):
         "## What was run",
         "",
         f"The comparison is {len(sheet['cells'])} distinct cells and {len(rows)} pre-registered runs on the "
-        f"frozen snapshot `{document['snapshot_id']}`, over {len(traded)} out-of-sample months "
+        f"frozen snapshot `{document.snapshot_id}`, over {len(traded)} out-of-sample months "
         f"({traded.min()} to {traded.max()}), out of a joined panel running "
-        f"{document['months'].min()} to {document['months'].max()}. Estimation is rolling "
+        f"{document.months.min()} to {document.months.max()}. Estimation is rolling "
         f"{exposures.WINDOW} months with a monthly refit; the constraint set is long-only, fully invested, "
         f"capped at {constraints.CAP:.0%} per sleeve with a {constraints.TURNOVER_CAP:.0%} one-way turnover "
         f"cap and a {constraints.BAND:.0%} no-trade band; cost is charged on traded notional at "
@@ -433,7 +433,7 @@ def _limitations(evidence, additivity_worst, link_worst):
         "decomposable measure, with the measurement that justifies the refusal in the budget notebook.\n\n"
         "**The exercise is a simulation.** The data is a frozen snapshot read under a single-use licence, "
         "no market data is published with the build, and no number here is a forecast of a live mandate. "
-        f"The snapshot is `{document['snapshot_id']}` and the record below is written against it."
+        f"The snapshot is `{document.snapshot_id}` and the record below is written against it."
     )
 
 
@@ -475,7 +475,7 @@ def record(evidence):
             "",
             DECLARATION,
             "",
-            f"Snapshot `{document['snapshot_id']}` - version {facade.VERSION} - written from "
+            f"Snapshot `{document.snapshot_id}` - version {facade.VERSION} - written from "
             f"{len(rows)} pre-registered runs over {len(sheet['cells'])} distinct cells.",
             "",
             "## 1. Recommendation",
@@ -540,7 +540,7 @@ def record(evidence):
             "5. The constraint set changes: a cap or band that binds on most steps makes a family's result "
             "a result about the constraints, and the perturbation runs exist to show how much.",
             "",
-            f"Written against snapshot `{document['snapshot_id']}`, build version {facade.VERSION}.",
+            f"Written against snapshot `{document.snapshot_id}`, build version {facade.VERSION}.",
             "",
         ]
     )

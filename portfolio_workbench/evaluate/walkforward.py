@@ -211,14 +211,12 @@ def main(root=None):
     """The engine's own report: both protocols re-cut on the frozen snapshot, every step of the rolling
     one printed, and the boundary checked on each."""
     document = loader.load_panel(root)
-    returns = panel.eur_excess_returns(
-        document["prices"], document["fx"], document["risk_free"]["monthly"]
-    )
+    returns = document.returns
     for kind in sorted(PROTOCOLS):
-        records = steps(document["months"], kind)
+        records = steps(document.months, kind)
         for record in records:
             record["observations"] = len(block(returns, record))
-        report = assert_no_look_ahead(records, document["months"])
+        report = assert_no_look_ahead(records, document.months)
         print(
             f"[table] the {kind} protocol: {report['steps']} steps {report['first_traded']}..{report['last_traded']} "
             f"over {report['windows']} windows, {report['observations']} sleeve-months read"

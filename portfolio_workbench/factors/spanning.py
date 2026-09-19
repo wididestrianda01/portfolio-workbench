@@ -30,7 +30,7 @@ a statement about these eleven sleeves over this window.
 import numpy as np
 from scipy.stats import f as f_distribution
 
-from ..data import loader, panel
+from ..data import loader
 from . import components as component_module
 from . import exposures
 from . import spine as spine_module
@@ -173,8 +173,8 @@ def fama_macbeth(returns, factors):
 
 def main(root=None):
     document = loader.load_panel(root)
-    returns = panel.eur_excess_returns(document["prices"], document["fx"], document["risk_free"]["monthly"])
-    named = spine_module.named_set(document["factors"]["eur"], spine_module.constructed_block(returns))
+    returns = document.returns
+    named = spine_module.named_set(document.factors.eur, spine_module.constructed_block(returns))
 
     rule = component_module.decompose(returns)
     # The counts the loop runs. The family size below is this loop's own, and both directions are tested
@@ -225,7 +225,7 @@ def main(root=None):
           f"computed, never asset-pricing evidence from this panel")
     print("[factor] describes this panel only: one eleven-sleeve universe, one window, and no published "
           "head-to-head on this universe to replicate")
-    for line in document["warnings"]:
+    for line in document.warnings:
         print(f"[factor] {line}")
     return {"rule": rule, "premium": premium, "cross": cross, "returns": returns, "named": named}
 

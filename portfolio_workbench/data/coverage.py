@@ -18,17 +18,17 @@ from . import loader, panel
 
 def main(root=None):
     document = loader.load_panel(root)
-    prices, fx = document["prices"], document["fx"]
+    prices, fx = document.prices, document.fx
     coverage = panel.coverage_months(prices)
-    months = document["months"]
+    months = document.months
 
-    print(f"[data] snapshot {document['snapshot_id']}, taken {document['as_of']}")
+    print(f"[data] snapshot {document.snapshot_id}, taken {document.as_of}")
     print(f"[data] {len(prices)} rows over {len(coverage)} instruments, "
           f"{prices['period_month'].nunique()} months of history")
     print(f"[data] joined panel {months.min()} → {months.max()} = {len(months)} months "
           f"× {prices['instrument'].nunique()} sleeves")
-    if document["dropped"]["prices"]:
-        print(f"[data] {document['dropped']['prices']} rows fell outside the declared window")
+    if document.dropped.prices:
+        print(f"[data] {document.dropped.prices} rows fell outside the declared window")
 
     print("[data] coverage per instrument:")
     for instrument, cover in coverage.items():
@@ -38,24 +38,24 @@ def main(root=None):
               f"{gap}  distributions {events}")
 
     print(f"[data] FX series: {sorted(fx['instrument'].unique())}")
-    factors = document["factors"]
-    usd, eur = factors["usd"], factors["eur"]
+    factors = document.factors
+    usd, eur = factors.usd, factors.eur
     print(f"[data] factor spine {usd.index.min()} → {usd.index.max()} "
           f"({len(usd)} months, cols {list(usd.columns)}), quoted in USD, translated to EUR "
           f"as a separate frame")
     newest = eur.index.max()
     print(f"[data] the translated frame is not the quoted one: Mkt-RF {usd.loc[newest, 'Mkt-RF']:+.2%} "
           f"quoted against {eur.loc[newest, 'Mkt-RF']:+.2%} in EUR at a dollar rate of "
-          f"{factors['fx_level'].loc[newest]:.4f}")
-    print(f"[data] factor vintage: {factors['vintage']!r}")
-    if factors["untranslated"]:
+          f"{factors.fx_level.loc[newest]:.4f}")
+    print(f"[data] factor vintage: {factors.vintage!r}")
+    if factors.untranslated:
         print(f"[data] factor months with no euro leg are not translated: "
-              f"{factors['untranslated']} (outside the panel, so no return is affected)")
-    risk_free = document["risk_free"]
-    daily = risk_free["daily"]
-    rf = risk_free["monthly"].reindex(months)
+              f"{factors.untranslated} (outside the panel, so no return is affected)")
+    risk_free = document.risk_free
+    daily = risk_free.daily
+    rf = risk_free.monthly.reindex(months)
     print(f"[data] risk-free: overnight series spliced at the benchmark transition, overlap "
-          f"{risk_free['overlap_days']} days at {risk_free['basis_bp']:+.1f} bp")
+          f"{risk_free.overlap_days} days at {risk_free.basis_bp:+.1f} bp")
     print(f"[data] risk-free accrued daily at /360: mean {rf.mean():.4%}/month over the panel, "
           f"min {rf.min():.4%}, max {rf.max():.4%}")
     # The counterfactual the accrual rule exists to exclude, computed here rather than shipped as a
@@ -66,7 +66,7 @@ def main(root=None):
     naive = float(np.prod(1.0 + daily.to_numpy()[:21] / 100.0) - 1.0)
     print(f"[data] the trap that rule closes: the same annualised rate compounded as a per-period rate "
           f"gives {naive:.0%} in a month")
-    for line in document["warnings"]:
+    for line in document.warnings:
         print(f"[data] {line}")
     return document
 

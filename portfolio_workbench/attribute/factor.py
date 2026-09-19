@@ -301,7 +301,7 @@ def fund_example(series, factors, bar):
 def report(cells, document, fit, holding, count=5):
     """Both views side by side, the risk split, and the fund example with its claim refused."""
     months = holding[0]["decomposition"]["months"]
-    print(f"[attrib] snapshot {document['snapshot_id']}: {len(fit['traded'])} refits "
+    print(f"[attrib] snapshot {document.snapshot_id}: {len(fit['traded'])} refits "
           f"{months.min()}..{months.max()} on {len(holding[0]['decomposition']['factors'].columns)} factors")
     print(f"[attrib] two views of one active return, never added to each other: the holding-based "
           f"Brinson total from {brinson.BRINSON_FACHLER}, and this factor decomposition as the explanation")
@@ -357,7 +357,7 @@ def report(cells, document, fit, holding, count=5):
     print(f"[attrib] the family-wise bar is {example['bar']:.4f} and the smallest alpha this sample could "
           f"have detected at eighty percent power is {example['detectable_alpha_annualised']:.2%}/yr: "
           f"{example['claim']}")
-    for line in document["warnings"]:
+    for line in document.warnings:
         print(f"[attrib] {line}")
     return {"cells": cells, "holding": holding, "fit": fit}
 
@@ -369,7 +369,7 @@ def main(root=None):
     analysis = analyse(loader.load_panel(root))
     document, returns, months = analysis.document, analysis.returns, analysis.months
     block = spine_module.constructed_block(returns)
-    named = spine_module.named_set(document["factors"]["eur"], block)
+    named = spine_module.named_set(document.factors.eur, block)
     fit = exposures.rolling(returns, named, months)
     model = design(fit, named)
     covariances = design_covariance(fit, named)

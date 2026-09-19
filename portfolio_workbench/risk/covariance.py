@@ -31,7 +31,7 @@ import numpy as np
 import pandas as pd
 from sklearn.covariance import LedoitWolf
 
-from ..data import loader, panel, universe
+from ..data import loader, universe
 from ..factors import components as component_module
 from ..factors.exposures import windows
 
@@ -147,13 +147,13 @@ def conditioning(returns, count=None):
 
 def main(root=None):
     document = loader.load_panel(root)
-    months = document["months"]
-    returns = panel.eur_excess_returns(document["prices"], document["fx"], document["risk_free"]["monthly"])
+    months = document.months
+    returns = document.returns
 
     traded, estimation = list(windows(months))[-1]
     block = returns.reindex(estimation).dropna(how="all")
     report = conditioning(block)
-    print(f"[risk] snapshot {document['snapshot_id']}, the window behind the last traded month "
+    print(f"[risk] snapshot {document.snapshot_id}, the window behind the last traded month "
           f"{traded}: {estimation[0]}..{estimation[-1]}, {len(block)} observations × {block.shape[1]} sleeves")
     print(f"[risk] sample covariance: condition number {report['sample_condition']:,.0f}")
     print(f"[risk] linear shrinkage: condition number {report['shrinkage_condition']:,.1f} at intensity "
@@ -172,7 +172,7 @@ def main(root=None):
     print(f"[risk] the three diagnostics this window produces for the estimator axis: sample conditioning "
           f"{report['sample_condition']:,.0f}, shrunk {report['shrinkage_condition']:,.0f}, factor "
           f"{report['factor_condition']:,.0f}")
-    for line in document["warnings"]:
+    for line in document.warnings:
         print(f"[risk] {line}")
     return {"report": report, "window": (traded, estimation), "returns": returns}
 

@@ -27,7 +27,7 @@ from portfolio_workbench.budget import euler
 from portfolio_workbench.compare import grid as grid_module
 from portfolio_workbench.compare import registry, table as table_module
 from portfolio_workbench.construct import constraints, families, means
-from portfolio_workbench.data import loader, panel, sql, universe
+from portfolio_workbench.data import loader, sql, universe
 from portfolio_workbench.evaluate import metrics, statistics, walkforward
 from portfolio_workbench.factors import components as cp
 from portfolio_workbench.factors import exposures, spanning
@@ -39,10 +39,10 @@ from reporting import skills_matrix, source_map, workbook
 @pytest.fixture(scope="module")
 def run():
     document = loader.load_panel()
-    months = document["months"]
-    returns = panel.eur_excess_returns(document["prices"], document["fx"], document["risk_free"]["monthly"])
+    months = document.months
+    returns = document.returns
     block = spine_module.constructed_block(returns)
-    named = spine_module.named_set(document["factors"]["eur"], block)
+    named = spine_module.named_set(document.factors.eur, block)
     return {
         "document": document,
         "months": months,
@@ -167,8 +167,8 @@ def test_the_sql_statement_of_the_contract_agrees_with_the_pandas_path():
 
     # The gate is the rule, so it is asserted where it bites: read at the last joined month rather than
     # at the snapshot's own date, the query hides the bars that month could not have seen.
-    at_snapshot = sql.coverage(con, views, when=document["as_of"])
-    earlier = sql.coverage(con, views, when=document["months"].max().to_timestamp())
+    at_snapshot = sql.coverage(con, views, when=document.as_of)
+    earlier = sql.coverage(con, views, when=document.months.max().to_timestamp())
     assert earlier["months_visible"].sum() < at_snapshot["months_visible"].sum()
     assert earlier["months_visible"].sum() < earlier["months"].sum()
 
@@ -320,8 +320,8 @@ def test_the_black_litterman_hand_case_passes():
 
 def test_the_walk_forward_is_look_ahead_free(stack):
     """Done criterion 5: the boundary holds, and the assertion that checks it is part of the run."""
-    steps = walkforward.steps(stack["document"]["months"])
-    walkforward.assert_no_look_ahead(steps, stack["document"]["months"])
+    steps = walkforward.steps(stack["document"].months)
+    walkforward.assert_no_look_ahead(steps, stack["document"].months)
     for step in steps:
         assert step["window_end"] < step["traded"]
     traded = stack["grid"]["results"][0]["traded"]
