@@ -98,22 +98,17 @@ def _set_widths(worksheet, widths):
         worksheet.column_dimensions[worksheet.cell(row=1, column=position).column_letter].width = width + 2
 
 
-def main(document=None, grid=None, path=None):
-    """Run the grid if it is not given, build the table and write the workbook beside the manifests."""
-    from portfolio_workbench.compare import grid as grid_module
+def main(document=None, path=None):
+    """Analyse the snapshot and write the workbook beside the run manifests."""
+    from portfolio_workbench import study
 
-    if document is None:
-        document = loader.load_panel()
-    if grid is None:
-        grid = grid_module.run_grid(document)
-    benchmark = grid_module.benchmark(grid["returns"], grid["months"])
-    sheet = table_module.rows(grid, benchmark)
+    analysis = study.analyse(loader.load_panel() if document is None else document)
     if path is None:
-        path = DEFAULT_OUTPUT_ROOT / document["snapshot_id"] / "comparison.xlsx"
-    target = write(sheet, document, path)
+        path = DEFAULT_OUTPUT_ROOT / analysis.document["snapshot_id"] / "comparison.xlsx"
+    target = write(analysis.sheet, analysis.document, path)
     print(
-        f"[table] workbook written to {target}: {len(table_module.block_tables(sheet))} blocks, each sheet "
-        f"carrying the snapshot {document['snapshot_id']}, the protocol and the cost multiple"
+        f"[table] workbook written to {target}: {len(table_module.block_tables(analysis.sheet))} blocks, each "
+        f"sheet carrying the snapshot {analysis.document['snapshot_id']}, the protocol and the cost multiple"
     )
     return target
 

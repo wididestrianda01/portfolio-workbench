@@ -458,7 +458,7 @@ def main(root=None, out=None, specs=None):
     print(f"[construct] {len(written)} run manifests written under {written[0].parent if written else None}")
     from . import table
 
-    table.main(grid=grid, document=document)
+    table.main(document=document, grid=grid)
     return grid
 
 

@@ -38,9 +38,8 @@ would read as a stock-picking result.
 import numpy as np
 import pandas as pd
 
-from ..compare import grid as grid_module
 from ..construct import constraints
-from ..data import loader, panel
+from ..data import loader
 
 # The papers this module implements, cited where their difference shows. 1985 is Brinson-Fachler, the
 # allocation term the report uses; 1986 is Brinson-Hood-BeeBower, which the hand-checked case runs
@@ -413,24 +412,17 @@ def report(cells, document, count=6):
 
 
 def main(root=None):
-    """Load the snapshot, run the declared grid, and attribute every book against the policy weights."""
-    document = loader.load_panel(root)
-    split = panel.currency_split(document["prices"], document["fx"])
-    grid = grid_module.run_grid(document)
-    benchmark_weights = grid_module.policy_weights(grid["returns"].columns)
-    cells = []
-    for result in grid["results"]:
-        block = decompose(result["weights"], benchmark_weights, split, document["risk_free"]["monthly"],
-                          net=result["net"])
-        block["id"] = result["id"]
-        block["stage"] = result["spec"]["stage"]
-        cells.append(block)
-    report(cells, document)
-    for cut in grid["cuts"]:
+    """Load the snapshot, analyse it once, and attribute every book against the policy weights."""
+    from ..study import analyse
+
+    analysis = analyse(loader.load_panel(root))
+    cells = [analysis.attribution[result["id"]] for result in analysis.grid["results"]]
+    report(cells, analysis.document)
+    for cut in analysis.grid["cuts"]:
         print(f"[attrib] {cut['id']}: cut from the grid, so there is nothing to attribute: {cut['reason']}")
-    for line in document["warnings"]:
+    for line in analysis.document["warnings"]:
         print(f"[attrib] {line}")
-    return {"cells": cells, "split": split, "grid": grid, "document": document}
+    return {"cells": cells, "analysis": analysis}
 
 
 if __name__ == "__main__":

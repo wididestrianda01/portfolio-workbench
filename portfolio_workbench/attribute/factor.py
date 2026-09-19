@@ -44,7 +44,7 @@ import numpy as np
 import pandas as pd
 
 from ..compare import grid as grid_module, registry
-from ..data import loader, panel
+from ..data import loader
 from ..evaluate import metrics, statistics
 from ..factors import exposures, spine as spine_module
 from . import brinson
@@ -363,42 +363,42 @@ def report(cells, document, fit, holding, count=5):
 
 
 def main(root=None):
-    """Load the snapshot, fit the factor model, run the grid, and put the two views side by side."""
-    document = loader.load_panel(root)
-    months = document["months"]
-    returns = panel.eur_excess_returns(document["prices"], document["fx"], document["risk_free"]["monthly"])
+    """Load the snapshot, fit the factor model, and put the two views side by side on one analysis."""
+    from ..study import analyse
+
+    analysis = analyse(loader.load_panel(root))
+    document, returns, months = analysis.document, analysis.returns, analysis.months
     block = spine_module.constructed_block(returns)
     named = spine_module.named_set(document["factors"]["eur"], block)
     fit = exposures.rolling(returns, named, months)
     model = design(fit, named)
     covariances = design_covariance(fit, named)
 
-    grid = grid_module.run_grid(document)
-    split = panel.currency_split(document["prices"], document["fx"])
-    benchmark_weights = grid_module.policy_weights(grid["returns"].columns)
-    cells, holding = [], []
-    policy = grid_module.benchmark(grid["returns"], grid["months"])
+    cells = [analysis.attribution[result["id"]] for result in analysis.grid["results"]]
+    benchmark_weights = grid_module.policy_weights(returns.columns)
     bar = statistics.family_wise_bar(len(registry.CELLS))
-    for result in grid["results"]:
-        holding_block = brinson.decompose(result["weights"], benchmark_weights, split,
-                                         document["risk_free"]["monthly"], net=result["net"])
-        holding_block["id"] = result["id"]
+    holding = []
+    for result, holding_block in zip(analysis.grid["results"], cells):
         active_weights = result["weights"].sub(benchmark_weights, axis=1)
         composition = decomposition(active_weights, returns, fit, named, model=model)
-        active = metrics.active(result["net"], policy)
-        entry = {
-            "id": result["id"],
-            "decomposition": composition,
-            "cross_view": cross_view(
-                holding_block["lines"][list(brinson.LINES)].sum(axis=1), composition["total"]
-            ),
-            "risk": risk_attribution(active_weights, fit, named, model=model, covariances=covariances),
-            "fund": fund_example(active, named, bar),
-        }
-        cells.append(holding_block)
-        holding.append(entry)
+        active = metrics.active(result["net"], analysis.benchmark)
+        holding.append(
+            {
+                "id": result["id"],
+                "decomposition": composition,
+                # The cross-view residual holds the factor decomposition against the holding-based one
+                # on the same active series, which is what makes two views of one return a check rather
+                # than two accounts of it.
+                "cross_view": cross_view(
+                    holding_block["lines"][list(brinson.LINES)].sum(axis=1), composition["total"]
+                ),
+                "risk": risk_attribution(active_weights, fit, named, model=model, covariances=covariances),
+                "fund": fund_example(active, named, bar),
+            }
+        )
     report(cells, document, fit, holding)
-    return {"cells": cells, "holding": holding, "fit": fit, "named": named, "returns": returns, "grid": grid}
+    return {"cells": cells, "holding": holding, "fit": fit, "named": named, "returns": returns,
+            "grid": analysis.grid}
 
 
 if __name__ == "__main__":

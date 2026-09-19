@@ -23,9 +23,9 @@ entry point as a subprocess and prints what it prints. A hand-written notebook w
 account of the same modules, and the second account is the one that goes stale.
 
 **One notebook per entry point, and every module is covered by one.** The spine is per module, and a
-module is a thing a reader can run: the thirteen entry points below. A module that exists only to be
-imported appears in the notebook of the entry point that drives it, which is what `COVERS` records and
-what section 1 prints, so no module of the package is left without a notebook that mentions it.
+module is a thing a reader can run: the entry points below. A module that exists only to be imported
+appears in the notebook of the entry point that drives it, which is what `drives` records and what
+section 1 prints, so no module of the package is left without a notebook that mentions it.
 
 After writing, each notebook is executed with nbclient, so "every notebook runs end to end" is a fact
 about the files on disk rather than an intention.
@@ -1145,7 +1145,81 @@ print(f"annualisation {metrics.PERIODS_PER_YEAR} periods, sub-periods {[name for
         ),
     },
     {
-        "slug": "15-the-consumer-boundary",
+        "slug": "15-the-analysis",
+        "title": "The analysis: one snapshot, one run, one covariance",
+        "entry": "portfolio_workbench.study",
+        "drives": ("study.py",),
+        "does": (
+            "The analysis is not a method: it is the one place a snapshot's run and the readings taken off "
+            "it are assembled. Nine call sites used to do that for themselves - the five entry points, the "
+            "memo, the workbook, the grid's own report and the acceptance fixture - and an assembly is "
+            "where a convention lives, which is how the risk budget came to be read against a covariance "
+            "taken over a different set of months from the one the cells were built on. The entry point "
+            "prints the shape of the run rather than a result: the numbers live in the modules behind it, "
+            "each with its own report."
+        ),
+        "contract": (
+            "The analysis consumes the document the loader returns and adds no contract of its own: the "
+            "table contract, the as-of rule and the panel window belong to `data/`, and this module "
+            "inherits them by reading what the loader handed it. What it does add is a constraint on the "
+            "readings - every one of them is taken over the months the run traded, and against one sample "
+            "covariance over those months - so a report naming a different window is describing a "
+            "different object rather than a second view of this one."
+        ),
+        "example_note": (
+            "The analysis's own identity is that its window is the run's window rather than a second cut of "
+            "the calendar, and that it refuses a grid with no run instead of reading an empty frame as a "
+            "window of zero months. The cell plants both cases; the covariance itself is checked where it "
+            "belongs, in the acceptance fixture, which holds the analysis's covariance against the "
+            "estimator module's own."
+        ),
+        "example": '''
+import pandas as pd
+
+from portfolio_workbench import study
+
+# The window every reading is taken over is read off the run rather than re-cut, so a grid that traded
+# three months is analysed over those three and not over whatever the calendar would have offered.
+planted = {"results": [{"traded": pd.PeriodIndex(["2020-01", "2020-02", "2020-03"], freq="M")}]}
+assert [str(month) for month in study.traded_months(planted)] == ["2020-01", "2020-02", "2020-03"]
+
+# A grid that produced no run has no window, and the analysis refuses rather than reading the absence
+# as a window of zero months.
+try:
+    study.traded_months({"results": []})
+except ValueError as refusal:
+    print("refused:", refusal)
+else:
+    raise AssertionError("a grid with no run should not yield a window")
+''',
+        "parameters": '''
+from portfolio_workbench.compare import registry
+from portfolio_workbench.data import universe
+
+print(f"sleeves {len(universe.TICKERS)}: {', '.join(universe.TICKERS)}")
+print(f"declared panel window {universe.WINDOW_START}..{universe.WINDOW_END}")
+print(f"cells {len(registry.CELLS)} over {registry.PRE_REGISTERED} pre-registered runs")
+print("covariance every reading is taken against: the sample covariance over the traded months")
+''',
+        "reading": (
+            "The analysis is what makes two reports comparable: the window, the estimator and the book set "
+            "their readings share are assembled in one place and stated by its entry point, so a reader "
+            "holding the comparison table and the risk budget is holding two readings of one run. A reader "
+            "must not read it as a result, because it computes nothing the modules behind it do not, and "
+            "must not read it as the mandate either - the panel window, the universe, the policy weights "
+            "and the constraint set are this build's decisions for one panel, and a consumer with a "
+            "different mandate supplies its own document."
+        ),
+        "not_establish": (
+            "Nothing here establishes anything about the panel, the methods or the cost convention: those "
+            "are the modules' own subjects, and each states what it does not establish in its own "
+            "notebook. It does not establish that the traded months are the right months to trade, which "
+            "is the evaluation design's claim rather than a property of this module, and it makes no claim "
+            "about the consumer boundary, which deliberately carries none of these decisions."
+        ),
+    },
+    {
+        "slug": "16-the-consumer-boundary",
         "title": "The consumer boundary: the data contract and the five analytics entry points",
         "entry": "portfolio_workbench.facade",
         "drives": ("facade.py",),

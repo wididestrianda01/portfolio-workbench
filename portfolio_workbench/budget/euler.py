@@ -35,9 +35,8 @@ for a reader to subtract.
 import numpy as np
 import pandas as pd
 
-from ..compare import grid as grid_module
 from ..construct import families
-from ..data import loader, panel, universe
+from ..data import loader, universe
 from ..evaluate import metrics
 
 # The level the tail case is computed at: the worst five percent of the window's months, read from the
@@ -313,49 +312,23 @@ def report(cells, document, policy, default=None):
 
 
 def main(root=None):
-    """Load the snapshot, run the grid, and read every book's consumption against the declared budget."""
-    document = loader.load_panel(root)
-    returns = panel.eur_excess_returns(document["prices"], document["fx"], document["risk_free"]["monthly"])
-    grid = grid_module.run_grid(document)
-    months = grid["results"][0]["traded"]
-    window = returns.reindex(months)
-    covariance = pd.DataFrame(
-        np.cov(window.to_numpy(), rowvar=False, ddof=1), index=window.columns, columns=window.columns
-    )
-    policy_weights = grid_module.policy_weights(grid["returns"].columns)
-    policy_series = grid_module.benchmark(grid["returns"], grid["months"])
-    policy_path = pd.DataFrame([policy_weights] * len(months), index=months)
+    """Load the snapshot, analyse it once, and read every book's consumption against the declared budget.
 
-    def record(identifier, book, active=None):
-        """One run's budget block: the consumption path, its mean book's budget, and the two comparisons
-        a reader cannot derive from the other numbers - whether the whole adds up, and whether the
-        ex-ante estimate held."""
-        weights = book.mean()
-        ex_ante = float(np.mean([
-            ex_ante_tracking_error(book.loc[month] - policy_weights, covariance) for month in book.index
-        ]))
-        return {
-            "id": identifier,
-            "contributions": path_contributions(book, covariance),
-            "budget": budget(weights, covariance),
-            "diversification": diversification(weights, covariance),
-            "additivity": additivity(weights, covariance),
-            "forecast": forecast_quality(ex_ante, ex_post_tracking_error(active)) if active is not None else None,
-            "refusal": var_refusal(window, weights),
-        }
+    The budget is read against the analysis's covariance, which the analysis names in its own report:
+    a budget read against a covariance the cell was not built on is a statement about two objects.
+    """
+    from ..study import analyse
 
-    cells = [
-        record(result["id"], result["weights"], metrics.active(result["net"], policy_series))
-        for result in grid["results"]
-    ]
-    policy = record("policy", policy_path)
+    analysis = analyse(loader.load_panel(root))
+    cells = [book for identifier, book in analysis.budgets.items() if identifier != "policy"]
+    policy = analysis.budgets["policy"]
     heaviest = max(cells, key=lambda cell: cell["contributions"]["volatility_annualised"])
-    report(cells, document, policy, default=heaviest)
-    for cut in grid["cuts"]:
+    report(cells, analysis.document, policy, default=heaviest)
+    for cut in analysis.grid["cuts"]:
         print(f"[risk] {cut['id']}: cut from the grid, so it carries no budget: {cut['reason']}")
-    for line in document["warnings"]:
+    for line in analysis.document["warnings"]:
         print(f"[risk] {line}")
-    return {"cells": cells, "policy": policy, "covariance": covariance, "grid": grid}
+    return {"cells": cells, "policy": policy, "covariance": analysis.covariance, "grid": analysis.grid}
 
 
 if __name__ == "__main__":

@@ -33,7 +33,6 @@ import pandas as pd
 from ..construct import constraints
 from ..evaluate import metrics, statistics
 from ..factors import exposures
-from . import grid as grid_module
 from . import registry
 
 # The columns of the row print, in order: the name, the width the print gives it, the format code the
@@ -537,18 +536,18 @@ def report(sheet, document):
     return sheet
 
 
-def main(grid=None, document=None):
-    """Run the grid if it is not given, then print the comparison table."""
-    from ..data import loader
+def main(document=None, grid=None):
+    """Analyse the snapshot unless a reading is given, then print the comparison table.
 
-    if document is None:
-        document = loader.load_panel()
-    if grid is None:
-        grid = grid_module.run_grid(document)
-    benchmark = grid_module.benchmark(grid["returns"], grid["months"])
-    sheet = rows(grid, benchmark)
-    report(sheet, document)
-    return sheet
+    The grid is passed through to the analysis rather than run here, so a caller that has just run it
+    is not charged for a second run and the table is read off the same run everything else is.
+    """
+    from ..data import loader
+    from ..study import analyse
+
+    analysis = analyse(loader.load_panel() if document is None else document, grid=grid)
+    report(analysis.sheet, analysis.document)
+    return analysis.sheet
 
 
 if __name__ == "__main__":

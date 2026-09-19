@@ -3,7 +3,9 @@
 This is the fixture the rest of the suite extends: the structural checks a reader is asked to take on
 trust are asserted here rather than left in prose, so a change that breaks one of them fails one
 command. It runs the grid, the comparison table, the attribution and the budget once, at module scope,
-and reads every claim from that one run.
+through the analysis, and reads every claim from that one run. Two tests then make a pass of their own,
+because that pass **is** what they check: the rerun test compares a second grid against the first, and
+the check on the prose deliverables re-reads the code the published documents were written from.
 
 **The rerun tolerance is stated, not implied.** A rerun of the grid on the frozen snapshot reproduces
 the metric table within `statistics.RERUN_TOLERANCE` (1e-06 relative), and every stochastic step draws
@@ -19,6 +21,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from portfolio_workbench import study
 from portfolio_workbench.attribute import brinson
 from portfolio_workbench.budget import euler
 from portfolio_workbench.compare import grid as grid_module
@@ -177,30 +180,39 @@ def test_the_sql_statement_of_the_contract_agrees_with_the_pandas_path():
 
 @pytest.fixture(scope="module")
 def stack():
-    """One run of the whole stack on the frozen snapshot: the grid, the table, the attribution."""
-    document = loader.load_panel()
-    grid = grid_module.run_grid(document)
-    benchmark = grid_module.benchmark(grid["returns"], grid["months"])
-    sheet = table_module.rows(grid, benchmark)
-    split = panel.currency_split(document["prices"], document["fx"])
-    policy = grid_module.policy_weights(grid["returns"].columns)
-    window = grid["returns"].reindex(grid["results"][0]["traded"])
-    covariance = pd.DataFrame(
-        np.cov(window.to_numpy(), rowvar=False, ddof=1), index=window.columns, columns=window.columns
-    )
-    holding = [
-        brinson.decompose(result["weights"], policy, split, document["risk_free"]["monthly"], net=result["net"])
-        for result in grid["results"]
-    ]
+    """One run of the whole stack on the frozen snapshot: the analysis every reading below is taken from.
+
+    Assembled once here through the analysis rather than by hand, because the hand-built version is what
+    let two readings of one run be taken against two different covariances.
+    """
+    analysis = study.analyse(loader.load_panel())
     return {
-        "document": document,
-        "grid": grid,
-        "benchmark": benchmark,
-        "sheet": sheet,
-        "policy": policy,
-        "covariance": covariance,
-        "holding": holding,
+        "document": analysis.document,
+        "grid": analysis.grid,
+        "benchmark": analysis.benchmark,
+        "sheet": analysis.sheet,
+        "policy": grid_module.policy_weights(analysis.returns.columns),
+        "covariance": analysis.covariance,
+        "holding": list(analysis.attribution.values()),
+        "analysis": analysis,
     }
+
+
+def test_the_analysis_reads_one_covariance_over_the_traded_months(stack):
+    """Every reading of the risk budget is taken against one covariance, over one window.
+
+    The defect this guards is not a wrong number but two right-looking ones: the budget was read against
+    the panel's own returns frame at one call site and against the traded months at another, so two
+    published documents stated different contributions for the same book and nothing compared them. The
+    check pins the months the covariance is taken over, and pins it to the estimator module's own sample
+    covariance rather than a fourth copy of the arithmetic in the layer that reports it.
+    """
+    analysis = stack["analysis"]
+    traded = analysis.grid["results"][0]["traded"]
+    assert analysis.covariance.equals(covariance.sample(analysis.returns.reindex(traded)))
+    # The panel's own returns frame is the window this was read over before, and it is not this one: a
+    # budget read over it describes a book held for months the run never held it.
+    assert not analysis.covariance.equals(covariance.sample(analysis.returns.iloc[1:]))
 
 
 def test_the_cell_count_is_the_pre_registered_one_and_every_cell_carries_a_verdict(stack):

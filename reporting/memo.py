@@ -21,16 +21,11 @@ recommendation would be withdrawn, each with the snapshot id and the version it 
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 
-from portfolio_workbench import facade
-from portfolio_workbench.attribute import brinson
-from portfolio_workbench.budget import euler
-from portfolio_workbench.compare import grid as grid_module
-from portfolio_workbench.compare import registry
+from portfolio_workbench import facade, study
 from portfolio_workbench.compare import table as table_module
 from portfolio_workbench.construct import constraints
-from portfolio_workbench.data import loader, panel, universe
+from portfolio_workbench.data import loader, universe
 from portfolio_workbench.factors import components as components_module
 from portfolio_workbench.factors import exposures, spanning
 from portfolio_workbench.factors import spine as spine_module
@@ -61,48 +56,28 @@ CLAIM = (
 
 
 def collect(root=None):
-    """Run the stack the memo reports on: the grid, the table, the attribution and the budget."""
-    document = loader.load_panel(root)
-    grid = grid_module.run_grid(document)
-    returns, months = grid["returns"], grid["months"]
-    benchmark = grid_module.benchmark(returns, months)
-    sheet = table_module.rows(grid, benchmark)
+    """Run the analysis the memo reports on, and add the factor readings only the memo needs.
 
-    split = panel.currency_split(document["prices"], document["fx"])
-    policy_weights = grid_module.policy_weights(returns.columns)
-    holding = []
-    for result in grid["results"]:
-        block = brinson.decompose(
-            result["weights"], policy_weights, split, document["risk_free"]["monthly"], net=result["net"]
-        )
-        block["id"] = result["id"]
-        holding.append(block)
-
-    window = returns.reindex(months[1:])
-    covariance = pd.DataFrame(
-        np.cov(window.to_numpy(), rowvar=False, ddof=1), index=window.columns, columns=window.columns
-    )
-    budgets = {
-        result["id"]: {
-            "budget": euler.budget(result["weights"].mean(), covariance),
-            "additivity": euler.additivity(result["weights"].mean(), covariance),
-        }
-        for result in grid["results"]
-    }
+    The analysis owns the run, the covariance behind the risk budget and the two decompositions. What
+    is added here is the count series, the headline decomposition and the spanning directions, which
+    this memo is the only reader of - pulling them into the analysis would widen its interface without
+    giving a second caller anything.
+    """
+    analysis = study.analyse(loader.load_panel(root))
+    document, returns, months = analysis.document, analysis.returns, analysis.months
     block = spine_module.constructed_block(returns)
     named = spine_module.named_set(document["factors"]["eur"], block)
-    counts = components_module.count_series(returns, months, window=exposures.WINDOW)
     headline = components_module.decompose(returns)
-    directions = spanning.directions(returns, named, headline["components"])
     return {
+        "analysis": analysis,
         "document": document,
-        "grid": grid,
-        "sheet": sheet,
-        "holding": holding,
-        "budgets": budgets,
-        "counts": counts,
+        "grid": analysis.grid,
+        "sheet": analysis.sheet,
+        "holding": list(analysis.attribution.values()),
+        "budgets": analysis.budgets,
+        "counts": components_module.count_series(returns, months, window=exposures.WINDOW),
         "headline": headline,
-        "directions": directions,
+        "directions": spanning.directions(returns, named, headline["components"]),
     }
 
 

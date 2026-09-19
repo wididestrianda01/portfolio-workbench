@@ -53,12 +53,12 @@ Two references travel with the count. The analytic Marchenko-Pastur edge for ele
 
 The budget is answered on two books: the policy benchmark, which is the mandate's own weights, and the sample's leader. Realised volatility contributions against the declared vector:
 
-- equity: target 55%, policy book 68.0%, leader 72.4%
-- government: target 20%, policy book 13.6%, leader 4.3%
-- credit: target 15%, policy book 9.4%, leader 0.1%
-- real_and_cash: target 10%, policy book 9.0%, leader 23.2%
+- equity: target 55%, policy book 68.5%, leader 75.8%
+- government: target 20%, policy book 14.0%, leader 4.9%
+- credit: target 15%, policy book 9.5%, leader 0.1%
+- real_and_cash: target 10%, policy book 7.9%, leader 19.2%
 
-The largest departure on the policy book is equity, at +13.0%. Consumption is therefore by accident rather than by design for the cells whose objective never mentioned the budget, and that is the honest reading rather than a defect: a risk-based family concentrates volatility where the covariance puts the risk, which is not where the mandate's vector puts it.
+The largest departure on the policy book is equity, at +13.5%. Consumption is therefore by accident rather than by design for the cells whose objective never mentioned the budget, and that is the honest reading rather than a defect: a risk-based family concentrates volatility where the covariance puts the risk, which is not where the mandate's vector puts it.
 
 The decomposition itself carries no unexplained residual of consequence. Euler contributions sum to portfolio volatility within 4e-16 relative on every run, and the linked attribution lands on the compounded excess with a largest residual of 2e-14. Value at risk is refused as a measure to decompose, and the refusal is measured rather than asserted: its conditional contributions do not sum to it, while the expected shortfall takes the same contributions additively.
 

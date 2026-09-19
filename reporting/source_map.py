@@ -140,6 +140,10 @@ SHARED = {
         "target, and the factor-model covariance, each reported with the conditioning that decides which "
         "of them is usable at this ratio of series to observations"
     ),
+    "study.py": (
+        "a composition of this effort, not a method: the one place the run and the covariance every reading "
+        "of it is taken against are assembled, so that two reports cannot be two objects"
+    ),
 }
 
 # The functions whose source is not their module's, keyed by module and name.
