@@ -176,14 +176,32 @@ def _rates(fx):
     return rates
 
 
+def _trim_months(legs):
+    """Every month-labelled frame in a leg mapping, trimmed to the declared window.
+
+    A leg mapping holds more than its frames - a vintage stamp, a basis in basis points, a daily series
+    on a calendar the window is not stated in - so the trim applies to what is indexed by month and
+    passes the rest through untouched.
+    """
+    kept = {}
+    for name, frame in legs.items():
+        if isinstance(frame, (pd.DataFrame, pd.Series)) and isinstance(frame.index, pd.PeriodIndex):
+            kept[name] = frame.loc[panel.window_months(frame.index)]
+        else:
+            kept[name] = frame
+    return kept
+
+
 def load_panel(root=None, as_of=None):
     """Every leg, verified and gated, ready for the analytics, as one named document.
 
-    `as_of` is a reader's moment, and the legs come back as that reader could have seen
-    them: the availability rule is enforced by the loader rather than left to every caller
-    to re-apply, so there is no path into the package that skips it. The too-fresh stop is
-    a different test and runs against the snapshot's own stamp, because a bar from a month
-    that had not closed when the snapshot was taken is a fetch fault whoever is asking.
+    `as_of` is a reader's moment, and the legs come back as that reader could have seen them: the
+    availability rule is applied here rather than left to every caller, and a caller that passes no
+    moment reads the panel as of the snapshot's own stamp, which is the moment `as_of` then reports.
+    The reader's moment is optional because the walk-forward is what enforces non-anticipation month by
+    month inside a run; the snapshot's own rule is not optional, and it is the one the too-fresh stop
+    holds the priced legs to, because a bar from a month that had not closed when the snapshot was
+    taken is a fetch fault whoever is asking.
 
     Warnings travel with the panel rather than being printed here, so that whichever
     module reports a number prints the qualification beside that number.
@@ -212,6 +230,11 @@ def load_panel(root=None, as_of=None):
     warnings += quality.run(fx, {}, taken)
     prices, dropped_prices = panel.window(prices)
     fx, dropped_fx = panel.window(fx)
+    # The same declared window for the legs that carry no `period_month` column. The rate leg is accrued
+    # from whatever its publisher has published, so without this it reaches into a month the panel's
+    # prices have not closed yet - a month the join hides and no book was held for.
+    factors = _trim_months(factors)
+    risk_free = _trim_months(risk_free)
 
     if as_of is not None:
         prices = panel.as_of(prices, as_of)

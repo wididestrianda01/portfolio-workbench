@@ -237,3 +237,16 @@ def window(frame, start=PANEL_START, end=WINDOW_END, column="period_month"):
     keep = (months >= pd.Period(start, freq="M")) & (months <= pd.Period(end, freq="M"))
     before, after = len(frame), int(keep.sum())
     return frame[keep], before - after
+
+
+def window_months(index, start=PANEL_START, end=WINDOW_END):
+    """A month-labelled index trimmed to the declared window.
+
+    The priced legs are trimmed by `window`, which reads a `period_month` column; the factor and rate
+    legs are indexed by the month itself and carry no such column, so the same rule is applied to the
+    index. Without it a leg reaches whatever its publisher has published since the panel's last
+    completed month - on this snapshot a ten-day September accrual in the cash leg, which is a month no
+    book was held for, in a leg the join hides rather than excludes.
+    """
+    months = pd.PeriodIndex(index, freq="M")
+    return months[(months >= pd.Period(start, freq="M")) & (months <= pd.Period(end, freq="M"))]

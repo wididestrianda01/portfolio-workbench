@@ -235,6 +235,24 @@ def test_a_priced_line_the_manifest_does_not_describe_stops_the_gate():
     assert stop.value.rule == "manifest mismatch"
 
 
+def test_every_month_labelled_leg_stops_at_the_declared_window(frozen):
+    """The declared window is a rule for every leg, not only for the ones carrying a `period_month`
+    column. The cash leg is accrued from whatever the rate publisher has published, which reaches into a
+    month the panel's prices have not closed: the join hides that month rather than excluding it, and a
+    leg the join hides is still a leg a report can print. The month is dropped, and the count of what the
+    window cost is reported rather than absorbed."""
+    document = loader.load_panel(frozen)
+    end = pd.Period(universe.WINDOW_END, freq="M")
+    assert document.risk_free.monthly.index.max() <= end
+    assert document.factors.usd.index.max() <= end
+    assert document.factors.eur.index.max() <= end
+    assert document.factors.fx_level.index.max() <= end
+    # The month is in the publisher's series and gone from the leg: the trim is the window's own rule
+    # rather than the join's, so a report that prints the leg cannot print a month no book was held for.
+    untrimmed = loader.load_risk_free(frozen, manifest.read(frozen))["monthly"]
+    assert untrimmed.index.max() > end
+
+
 def test_the_fx_legs_are_the_one_exemption_from_the_issuer_facts(frozen):
     """A level is not a fund, so the quoted-series map grants the exemption rather than the line's
     absence from the manifest doing it. Every priced line is described, which is what lets the gate
