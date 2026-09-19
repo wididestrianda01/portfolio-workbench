@@ -46,8 +46,11 @@ from ..factors import exposures
 REFIT = "monthly"
 
 # The fields a step record carries, in the order the report prints them. `window` holds the window's
-# months themselves and travels with the record rather than in the frame, because the frame's index is
-# the traded month and a column of month indexes would have to be unpacked by every reader.
+# months themselves and travels beside the record rather than in it, because a reader of the record
+# wants the month labels and a column of window objects would have to be unpacked by every one of them.
+# The list is the record's declaration, and it is checked on the records themselves in
+# `assert_no_look_ahead`: the frame that used to render it was built for every run and read by nobody,
+# so the declaration has to be held against something a run actually produced.
 FIELDS = (
     "traded",
     "window_start",
@@ -99,8 +102,11 @@ def steps(months, kind="rolling", window=exposures.WINDOW):
 
 
 def block(returns, step):
-    """The rows one step may estimate from: the window cut by the package's one rule, and refused at
-    the moment it is handed out if it reaches the month the step trades.
+    """The rows one step may estimate from, and how many of them there were.
+
+    The count is returned beside the rows rather than measured by the caller, because the caller that
+    measured it wrote it into the record from outside the module that owns the record - which is how a
+    new field came to be a change in four files with no single validator.
 
     The check is the cheap half of the boundary and it runs before an optimiser is called, so a window
     that had been mis-cut cannot first produce a plausible book and be caught afterwards. The rule
@@ -114,17 +120,19 @@ def block(returns, step):
             f"not before the month it trades, {step['traded']}: an estimate formed at the close of a month "
             f"cannot read that month's own bar"
         )
-    return rows
+    return rows, len(rows)
 
 
-def frame(records):
-    """The records as one row per traded month, which is what a report or a notebook reads."""
-    index = pd.PeriodIndex([record["traded"] for record in records], freq="M")
-    return pd.DataFrame(
-        {field: [record[field] for record in records] for field in FIELDS},
-        index=index,
-        columns=list(FIELDS),
-    )
+def observed(step, taken, components=None):
+    """The step's record completed with the two fields only the run can know.
+
+    `steps` leaves both unset because it cuts no window and reads no estimator: how many rows a window
+    actually held is measured when the window is cut, and the component count is the estimator's own
+    report. Both are written here, by the module that owns the record, rather than assigned into it
+    from the runner - a record half-filled at one call site and half-filled at another has no single
+    place that can say what its fields are.
+    """
+    return {**step, "observations": taken, "components": components}
 
 
 def assert_no_look_ahead(records, months):
@@ -146,9 +154,21 @@ def assert_no_look_ahead(records, months):
     windows are one month apart a window key cannot repeat, so a comparison between two steps' counts
     could never fire; what the count path shows is that each step's model was fitted on its own
     trailing window, which the boundary clause above is what enforces.
+
+    The record's own shape is checked here too. `FIELDS` declares it, and the frame that used to render
+    the declaration was built for every run and read by nobody, so the declaration is checked on the
+    records instead - the ones a run produced and the ones a test planted by hand alike, since both
+    reach this function and a field added to one and not the other should fail rather than propagate.
     """
     if not len(records):
         raise ValueError("the engine has no steps to check; an empty run is not a boundary")
+    declared = set(FIELDS) | {"window"}
+    for record in records:
+        if set(record) != declared:
+            raise ValueError(
+                f"the step record for {record.get('traded')} is not the shape the engine declares: "
+                f"missing {sorted(declared - set(record))}, unexpected {sorted(set(record) - declared)}"
+            )
     traded = [record["traded"] for record in records]
     if any(later <= earlier for earlier, later in zip(traded, traded[1:])):
         raise ValueError(f"the engine's traded months are not strictly increasing: {traded[:3]}")
@@ -213,9 +233,11 @@ def main(root=None):
     document = loader.load_panel(root)
     returns = document.returns
     for kind in sorted(PROTOCOLS):
-        records = steps(document.months, kind)
-        for record in records:
-            record["observations"] = len(block(returns, record))
+        records = []
+        for record in steps(document.months, kind):
+            # Only the window's count is read here: the rows themselves are what the runner estimates
+            # from, and this entry point is checking that the engine cuts the window it claims to.
+            records.append(observed(record, block(returns, record)[1]))
         report = assert_no_look_ahead(records, document.months)
         print(
             f"[table] the {kind} protocol: {report['steps']} steps {report['first_traded']}..{report['last_traded']} "

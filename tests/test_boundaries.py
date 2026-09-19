@@ -305,6 +305,14 @@ def test_the_engine_records_every_step_and_refuses_a_planted_look_ahead():
         record["components"] = 2
     assert walkforward.assert_no_look_ahead(records, CALENDAR)["components"] == [2]
 
+    # The record's own shape is part of what a run has to get right, and the frame that used to render
+    # the declaration is gone: a record that dropped a field the engine declares is refused rather than
+    # read as a step with nothing to say about it.
+    incomplete = list(records)
+    incomplete[3] = {key: value for key, value in incomplete[3].items() if key != "refit"}
+    with pytest.raises(ValueError, match="not the shape the engine declares"):
+        walkforward.assert_no_look_ahead(incomplete, CALENDAR)
+
 
 def test_the_engine_refuses_a_window_that_reaches_its_own_month_as_it_hands_the_rows_out():
     """The cheap half of the check runs before an optimiser is called: a mis-cut step cannot first
@@ -320,8 +328,8 @@ def test_the_engine_refuses_a_window_that_reaches_its_own_month_as_it_hands_the_
         "window_start": rolls[0][1][0],
         "window_end": rolls[0][1][-1],
     }
-    assert len(walkforward.block(frame, step)) == exposures.WINDOW
-    assert len(walkforward.block(frame.iloc[1:], step)) == exposures.MIN_OBS, "the front bar carries no return"
+    assert walkforward.block(frame, step)[1] == exposures.WINDOW
+    assert walkforward.block(frame.iloc[1:], step)[1] == exposures.MIN_OBS, "the front bar carries no return"
     with pytest.raises(ValueError, match="below the"):
         walkforward.block(frame.iloc[2:], step)
 

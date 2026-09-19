@@ -116,17 +116,18 @@ def run_cell(spec, returns, months, cache=None):
     """One declared run: its weight path, its return series, its diagnostics and its establishment line."""
     family = families.FAMILIES[spec["family"]]
     mean_input = means.MEANS[spec["mean"]] if spec["mean"] is not None else None
-    records = walkforward.steps(months, spec["protocol"])
+    records = list(walkforward.steps(months, spec["protocol"]))
     path, estimator_intensities, counts = [], [], []
     mean_reports, sensitivity = [], {}
 
     for position, step in enumerate(records):
-        block = walkforward.block(returns, step)
-        step["observations"] = len(block)
+        block, taken = walkforward.block(returns, step)
         traded = step["traded"]
         key = (spec["estimator"], spec["protocol"], str(step["window_start"]), str(step["window_end"]))
         matrix, covariance_report = window_covariance(spec["estimator"], block, cache=cache, key=key)
-        step["components"] = covariance_report.get("components")
+        # The record is completed by the module that owns it, in place, so the boundary check below
+        # reads the same records the run was driven by.
+        records[position] = step = walkforward.observed(step, taken, covariance_report.get("components"))
         if covariance_report.get("intensity") is not None:
             estimator_intensities.append(covariance_report["intensity"])
         if covariance_report.get("components") is not None:
@@ -247,7 +248,6 @@ def run_cell(spec, returns, months, cache=None):
         "mean_intensity": mean_intensity_path,
         "cap_binding": pd.Series(cap_binding, index=index),
         "turnover_binding": pd.Series(turnover_binding, index=index),
-        "walk": walkforward.frame(records),
         "walk_report": walk,
         "summary": summary,
     }
