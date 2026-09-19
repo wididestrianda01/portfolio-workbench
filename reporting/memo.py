@@ -116,6 +116,15 @@ def _span(rows, key):
     return min(values), max(values)
 
 
+def _verb(count, singular, plural):
+    """A count with its verb inflected, for the clauses whose count is a property of the run.
+
+    A sentence that is right at sixteen and wrong at one is a sentence a reader stops trusting, and
+    these counts come from the verdicts rather than from the writer.
+    """
+    return f"{count} {singular if count == 1 else plural}"
+
+
 BARS = ("policy", "equal_weight")
 MEAN_CELLS = ("mean_variance_sample", "mean_variance_shrunk", "mean_variance_black_litterman", "mean_variance_none")
 
@@ -506,8 +515,9 @@ def record(evidence):
             f"correlation implies, it would be {sheet['adjusted_bar']:.4f}, and the conservative value is the "
             f"one applied. {len(cleared)} of the {len(rows)} runs clear the bar, so a difference is detectable "
             f"on those rows; {len(behind)} of them are significantly behind the benchmark once the cost is "
-            f"charged, {len(lost)} fail the rank-retention rung that follows, {len(unrun)} have no expanding leg "
-            f"and cannot complete the ladder, and {len(candidates)} clear every rung. The leader's rank retention across "
+            f"charged, {_verb(len(lost), 'fails', 'fail')} the rank-retention rung that follows, "
+            f"{_verb(len(unrun), 'has', 'have')} no expanding leg and cannot complete the ladder, and "
+            f"{_verb(len(candidates), 'clears', 'clear')} every rung. The leader's rank retention across "
             f"{statistics.BOOTSTRAP_DRAWS} resamples is {retention:.1%}. The haircut is self-imposed from the "
             "literature and is not a regulatory requirement.",
             "",

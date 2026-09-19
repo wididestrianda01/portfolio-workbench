@@ -364,6 +364,23 @@ def test_the_notebook_set_covers_the_package_and_is_the_generated_one():
         )
 
 
+def test_the_prose_deliverables_are_the_ones_the_code_writes():
+    """The memo and the record are generated, so the copies in the repository are read against the code.
+
+    The drift this catches is silent, and it had happened: a sentence rewritten in the generator left
+    the published document stating the old one, and no other check reads those two files. The run
+    `collect` makes is the one the documents are written from, so the comparison is byte for byte -
+    the price is a second pass over the stack, which is what makes the published text a fact about the
+    code rather than a file someone remembered to regenerate.
+    """
+    from reporting import memo as memo_module
+
+    root = Path(__file__).resolve().parents[1]
+    evidence = memo_module.collect()
+    assert (root / "reporting" / "findings-memo.md").read_text() == memo_module.memo(evidence)
+    assert (root / "reporting" / "decision-record.md").read_text() == memo_module.record(evidence)
+
+
 def test_every_method_is_traced_to_a_cited_source():
     """Done criterion 6: the source map is checked over the code, not over a hand-kept list."""
     missing = source_map.unmapped()

@@ -10,7 +10,7 @@ Snapshot `2026-09-13` - version 1.0 - written from 20 pre-registered runs over 1
 
 ## 2. Evidence, with the haircut applied
 
-The bar over 16 cells is |z| >= 2.7344, which is also the multiple-testing haircut; at the 5.3 effective tests the realised correlation implies, it would be 2.3263, and the conservative value is the one applied. 9 cells are significantly behind the benchmark once cost is charged; 16 cleared the bar, of which 1 then failed the rank-retention rung and 2 are reported as different on the paired test with no expanding leg run for them; and 0 cleared every rung. The leader's rank retention across 2000 resamples is 67.5%. The haircut is self-imposed from the literature and is not a regulatory requirement.
+The bar over 16 cells is |z| >= 2.7344, which is also the multiple-testing haircut; at the 5.3 effective tests the realised correlation implies, it would be 2.3263, and the conservative value is the one applied. 16 of the 20 runs clear the bar, so a difference is detectable on those rows; 9 of them are significantly behind the benchmark once the cost is charged, 1 fails the rank-retention rung that follows, 2 have no expanding leg and cannot complete the ladder, and 0 clear every rung. The leader's rank retention across 2000 resamples is 67.5%. The haircut is self-imposed from the literature and is not a regulatory requirement.
 
 ## 3. Alternatives rejected
 
