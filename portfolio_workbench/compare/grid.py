@@ -215,7 +215,7 @@ def run_cell(spec, returns, months, cache=None):
         "turnover_mean": float(turnover_series.mean()),
         "turnover_annualised": float(turnover_series.mean() * 12),
         "cost_annualised": float(constraints.cost(turnover_series.mean()) * 12),
-        "cap_binding_mean": float(np.mean(cap_binding)),
+        "cap_binding_frequency": float(np.mean(cap_binding)),
         "cap_binding_steps": int(sum(value > 0 for value in cap_binding)),
         "turnover_cap_binding_steps": int(sum(turnover_binding)),
         # The estimation-error proxies are read off the target path, and the traded path is reported
@@ -224,9 +224,9 @@ def run_cell(spec, returns, months, cache=None):
         # about the estimator under test, and the gap between the two is what the rules cost.
         "concentration": float(np.mean(1.0 / (target_path ** 2).sum(axis=1))),
         "concentration_traded": float(np.mean(1.0 / (weights ** 2).sum(axis=1))),
-        "max_single_weight": float(target_path.to_numpy().max()),
-        "max_single_weight_traded": float(weights.to_numpy().max()),
-        "target_movement": float(np.mean(movements)) if movements else 0.0,
+        "largest_weight": float(target_path.to_numpy().max()),
+        "largest_weight_traded": float(weights.to_numpy().max()),
+        "weight_stability": float(np.mean(movements)) if movements else 0.0,
         "establishment": establishment,
         "gross_cumulative": float((1.0 + gross_series).prod() - 1.0),
         "net_cumulative": float((1.0 + net_series).prod() - 1.0),
@@ -392,7 +392,7 @@ def report(grid, document):
         details.append(
             f"effective sleeve count {summary['concentration']:.2f} on the target path, "
             f"{summary['concentration_traded']:.2f} traded, largest weight "
-            f"{summary['max_single_weight']:.3f} against {summary['max_single_weight_traded']:.3f}"
+            f"{summary['largest_weight']:.3f} against {summary['largest_weight_traded']:.3f}"
         )
         if summary["components"] is not None:
             details.append(f"retained components {summary['components']}")
@@ -430,15 +430,15 @@ def report(grid, document):
         print(f"[construct] the cap's effect, {identifier} against its uncapped pair: turnover "
               f"{base['summary']['turnover_annualised']:.2%} -> {lifted['summary']['turnover_annualised']:.2%}, "
               f"effective sleeve count {base['summary']['concentration']:.2f} -> {lifted['summary']['concentration']:.2f}, "
-              f"largest weight {base['summary']['max_single_weight']:.3f} -> {lifted['summary']['max_single_weight']:.3f}, "
+              f"largest weight {base['summary']['largest_weight']:.3f} -> {lifted['summary']['largest_weight']:.3f}, "
               f"volatility {base['summary']['volatility_annualised']:.2%} -> {lifted['summary']['volatility_annualised']:.2%}")
     print(f"[table] {'cell':<34s} {'turnover/yr':>11s} {'cost/yr':>8s} {'capbind':>8s} {'turnbind':>9s} "
           f"{'conc':>6s} {'move':>7s} {'grosscum':>9s} {'vol/yr':>7s}")
     for result in grid["results"]:
         summary = result["summary"]
         print(f"[table] {result['id']:<34s} {summary['turnover_annualised']:>9.2%} {summary['cost_annualised']:>8.2%} "
-              f"{summary['cap_binding_mean']:>8.2f} {summary['turnover_cap_binding_steps']:>9d} "
-              f"{summary['concentration']:>6.2f} {summary['target_movement']:>6.2%} "
+              f"{summary['cap_binding_frequency']:>8.2f} {summary['turnover_cap_binding_steps']:>9d} "
+              f"{summary['concentration']:>6.2f} {summary['weight_stability']:>6.2%} "
               f"{summary['gross_cumulative']:>9.2%} {summary['volatility_annualised']:>7.2%}")
     for cut in grid["cuts"]:
         print(f"[table] {cut['id']:<34s} cut: {cut['reason']}")

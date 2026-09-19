@@ -15,6 +15,7 @@ information ratio, which is asserted as a direction rather than as a value.
 """
 
 import ast
+import json
 from pathlib import Path
 
 import numpy as np
@@ -34,6 +35,18 @@ from portfolio_workbench.factors import exposures, spanning
 from portfolio_workbench.factors import spine as spine_module
 from portfolio_workbench.risk import covariance
 from reporting import skills_matrix, source_map, workbook
+
+
+# The names a run's manifest and its table row share. They are one vocabulary now, which is what lets a
+# manifest be joined to the row it belongs to rather than read through the function that renamed it.
+MANIFEST_ROW_NAMES = (
+    "turnover_annualised",
+    "cost_annualised",
+    "cap_binding_frequency",
+    "weight_stability",
+    "concentration",
+    "largest_weight",
+)
 
 
 @pytest.fixture(scope="module")
@@ -213,6 +226,25 @@ def test_the_analysis_reads_one_covariance_over_the_traded_months(stack):
     # The panel's own returns frame is the window this was read over before, and it is not this one: a
     # budget read over it describes a book held for months the run never held it.
     assert not analysis.covariance.equals(covariance.sample(analysis.returns.iloc[1:]))
+
+
+def test_a_run_manifest_and_its_table_row_carry_one_set_of_names(stack, tmp_path):
+    """A run's manifest is what makes its weight path reproducible, and nothing read one back.
+
+    Its leaves agree with the table row's because the runner and the row now use one vocabulary: the row
+    used to rename three of the runner's measurements, so joining a manifest to a row meant reading the
+    function that did the renaming, and the manifest's own names could drift from the code unchecked.
+    The check joins them on the cell id - the name a manifest is written under - and holds the shared
+    names against the row, which is what makes the record checkable rather than merely written.
+    """
+    written = grid_module.write_manifests(stack["document"], stack["grid"]["results"], tmp_path)
+    by_cell = {row["cell"]: row for row in stack["sheet"]["rows"]}
+    assert len(written) == len(stack["grid"]["results"])
+    for path in written:
+        record = json.loads(path.read_text())
+        row = by_cell[record["cell"]]
+        for name in MANIFEST_ROW_NAMES:
+            assert record["summary"][name] == pytest.approx(row[name]), f"{record['cell']}: {name}"
 
 
 def test_the_cell_count_is_the_pre_registered_one_and_every_cell_carries_a_verdict(stack):
