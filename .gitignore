@@ -1,13 +1,9 @@
-# Repository boundary: the repository carries the build.
-# Local working notes stay out of the index.
-
-# The frozen market-data snapshot: retrieved once, local, never redistributed.
+# The frozen market-data snapshot: retrieved once, local, and never redistributed, together with the
+# run manifests and the workbook export derived from it. Ignored by extension as well as by path,
+# because every CSV, archive, workbook or columnar file in this tree is either the snapshot or a
+# derivative of it, and the accident this prevents is a fetch or an export landing beside the code
+# under a name no path rule listed.
 .data/
-
-# Data containers, ignored by extension rather than by path. Every CSV, archive, workbook or columnar
-# file in this tree is either the snapshot or a derivative of it, and the licence posture forbids
-# shipping either; the accident this prevents is a fetch or an export landing beside the code under a
-# name no path rule listed. The snapshot fetch and the workbook export are the two that will happen.
 *.csv
 *.zip
 *.xlsx

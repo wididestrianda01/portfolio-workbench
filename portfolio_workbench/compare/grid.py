@@ -53,7 +53,23 @@ from ..risk import covariance as covariance_module
 from . import registry
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_RUN_ROOT = HERE.parent.parent / ".data" / "runs"
+REPO_ROOT = HERE.parent.parent
+DEFAULT_RUN_ROOT = REPO_ROOT / ".data" / "runs"
+
+
+def shown_path(path):
+    """A location as a report should name it: relative to the repository root when it lies inside the
+    checkout, and the path itself when it does not.
+
+    A report is read by someone who does not have this checkout. The absolute path of the machine
+    that produced it discloses that machine, tells the reader nothing they can act on, and travels
+    into anything the report is pasted into.
+    """
+    path = Path(path)
+    try:
+        return path.relative_to(REPO_ROOT)
+    except ValueError:
+        return path
 
 
 def _sample(block):
@@ -455,7 +471,8 @@ def main(root=None, out=None, specs=None):
     print(f"[construct] benchmark (policy weights, monthly, costless): {len(policy)} months, cumulative "
           f"{float((1 + policy).prod() - 1):+.2%}")
     written = write_manifests(document, grid["results"], root=out)
-    print(f"[construct] {len(written)} run manifests written under {written[0].parent if written else None}")
+    print(f"[construct] {len(written)} run manifests written under "
+          f"{shown_path(written[0].parent) if written else None}")
     from . import table
 
     table.main(document=document, grid=grid)

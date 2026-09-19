@@ -79,9 +79,18 @@ print("manifest fields: " + ", ".join(sorted(document.manifest)))
 RUN_CODE = '''
 import subprocess
 import sys
+from pathlib import Path
+
+# The package is imported from the repository root, so the run needs the root as its working
+# directory rather than wherever the kernel was started. Walked up from the kernel's own directory
+# rather than written in at generation time: an absolute path here would name one workstation, and
+# the notebook is a file every reader runs on their own.
+root = next(
+    parent for parent in [Path.cwd(), *Path.cwd().parents] if (parent / "portfolio_workbench").is_dir()
+)
 
 finished = subprocess.run(
-    [sys.executable, "-m", "{entry}"], capture_output=True, text=True, cwd="{root}"
+    [sys.executable, "-m", "{entry}"], capture_output=True, text=True, cwd=root
 )
 print(finished.stdout)
 assert finished.returncode == 0, finished.stderr
@@ -135,7 +144,7 @@ def _cells_for(record):
         )
     )
     cells.append(_code(PROVENANCE_CODE + record["parameters"]))
-    cells.append(_code(RUN_CODE.format(entry=record["entry"], root=ROOT)))
+    cells.append(_code(RUN_CODE.format(entry=record["entry"])))
     cells.append(_md(f"## 6. {SPINE[5]}\n\n{record['reading']}"))
     cells.append(_md(f"## 7. {SPINE[6]}\n\n{record['not_establish']}"))
     return cells
@@ -581,7 +590,7 @@ rng = np.random.default_rng(3)
 frame = pd.DataFrame({"a": rng.normal(0.0, 0.02, 12), "b": rng.normal(0.0, 0.01, 12)}, index=months)
 
 sample = covariance.sample(frame)
-assert np.allclose(np.diag(sample.to_numpy()), np.var(frame, ddof=1), atol=1e-15)
+assert np.allclose(np.diag(sample.to_numpy()), frame.var(ddof=1).to_numpy(), atol=1e-15)
 
 report = covariance.conditioning(frame)
 assert report["sample_condition"] > report["shrinkage_condition"]
@@ -987,7 +996,7 @@ print("stage A", len(registry.STAGE_A), "stage B", len(registry.STAGE_B), "stage
 from portfolio_workbench.compare import grid, registry
 
 print(f"pre-registered runs {registry.PRE_REGISTERED}, distinct cells {len(registry.CELLS)}")
-print(f"run manifests are written under the snapshot's own directory, {grid.DEFAULT_RUN_ROOT}")
+print(f"run manifests are written under the snapshot's own directory, {grid.shown_path(grid.DEFAULT_RUN_ROOT)}")
 ''',
         "reading": (
             "The grid produces the series the comparison is read from, and its resolution limit is "
