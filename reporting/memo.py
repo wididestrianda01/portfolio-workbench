@@ -219,7 +219,8 @@ def memo(evidence):
         "## What this memo does not establish",
         "",
         "No research question asks which family is best in general, and the panel cannot support the "
-        "question: eleven sleeves, 191 months and one mandate give a comparison on this universe rather "
+        f"question: {len(universe.TICKERS)} sleeves, {len(document.months)} months and one mandate give a "
+        "comparison on this universe rather "
         "than a ranking of methods. The memo does not establish that the leader would repeat out of "
         "sample, that a cost of a few basis points a year is the whole cost, or that a verdict of no "
         "difference detected means two methods are equivalent. Nothing here is a claim about a live "
@@ -268,7 +269,8 @@ def _rq2(stage_a, stage_b, lo_te, hi_te, lo_b_te, hi_b_te, lo_vol, hi_vol, lo_b_
         f"choice: swapping the covariance estimator changes the book, and it changes it by about a "
         f"quarter as much as swapping the objective does.\n\n"
         "That reading has a stated precondition, and it is the one the risk layer reports: at sixty months "
-        "and eleven sleeves the sample covariance's condition number makes the optimiser the object under "
+        f"and {len(universe.TICKERS)} sleeves the sample covariance's condition number makes the optimiser "
+        "the object under "
         "test far more than the estimator. The three estimators differ in conditioning, and the matrix the "
         "shrinkage draws toward is a choice inside the estimator rather than a property of the panel, so "
         "the dispersion measured here is a lower bound on what a differently structured risk model would "
@@ -339,7 +341,8 @@ def _rq5(counts, decomposition):
         f"(falsified: {counts['falsified']}, a move of more than one component in "
         f"{counts['move_share']:.0%} of the steps), and the stability check on independently permuted "
         "windows agrees with the count.\n\n"
-        f"Two references travel with the count. The analytic Marchenko-Pastur edge for eleven series over a "
+        f"Two references travel with the count. The analytic Marchenko-Pastur edge for "
+        f"{len(universe.TICKERS)} series over a "
         f"sixty-month window is {float(np.min(counts['mp_edge'])):.4f} to {float(np.max(counts['mp_edge'])):.4f} "
         "across the windows, and the matched permutation null the rule actually uses sits higher, at "
         f"{float(np.min(counts['null_top'])):.4f} to {float(np.max(counts['null_top'])):.4f}, because an "
@@ -411,9 +414,10 @@ def _rq7(cost, leader_row, sheet):
 
 def _limitations(evidence, additivity_worst, link_worst):
     document = evidence["document"]
+    traded = len(evidence["grid"]["results"][0]["traded"])
     return (
-        f"**The panel is one panel.** Eleven UCITS sleeves, 191 months of which 131 are traded, one "
-        f"mandate and one currency. A difference that this design cannot resolve is not reported as an "
+        f"**The panel is one panel.** {len(universe.TICKERS)} UCITS sleeves, {len(document.months)} months "
+        f"of which {traded} are traded, one mandate and one currency. A difference that this design cannot resolve is not reported as an "
         "absence, and a difference it does resolve is a statement about this universe.\n\n"
         "**The noise floor is stated, not implied.** Sixteen cells tested against two families give a "
         "family-wise bar that a real but modest advantage will not clear, and the smallest detectable "
@@ -421,7 +425,8 @@ def _limitations(evidence, additivity_worst, link_worst):
         "rungs, and a cell failing either is reported as no difference detected rather than as a small "
         "difference.\n\n"
         f"**Estimation error is visible and not modelled away.** The leader keeps its rank in only "
-        f"{evidence['sheet']['retention']['retention']:.1%} of resamples against the 80% floor, and its "
+        f"{evidence['sheet']['retention']['retention']:.1%} of resamples against the "
+        f"{statistics.RANK_RETENTION_FLOOR:.0%} floor, and its "
         "target path moves "
         f"{_by_cell(evidence['sheet'])[evidence['sheet']['retention']['leader']]['weight_stability']:.2%} a "
         "month; the weight-stability diagnostic is reported for every cell. The mean-variance family's own error is in "
@@ -441,6 +446,7 @@ def record(evidence):
     """The decision record: one page, six parts, with its own falsification conditions."""
     sheet = evidence["sheet"]
     document = evidence["document"]
+    traded = len(evidence["grid"]["results"][0]["traded"])
     rows = sheet["rows"]
     by_cell = _by_cell(sheet)
     leader = sheet["retention"]["leader"]
@@ -518,7 +524,8 @@ def record(evidence):
             "",
             "## 5. Limitations",
             "",
-            "One panel, eleven sleeves, 191 months of which 131 are traded, one mandate and one currency. "
+            f"One panel, {len(universe.TICKERS)} sleeves, {len(document.months)} months of which "
+            f"{traded} are traded, one mandate and one currency. "
             "Sixteen cells tested at a family-wise bar leave a resolution limit on every row. Cost is "
             "charged at a single per-side multiple with a sensitivity run beside it, and market impact and "
             "capacity are outside the panel. The multiple-testing correction is a self-imposed discipline. "
@@ -555,7 +562,7 @@ def write(evidence=None, memo_path=None, record_path=None):
     record_path.write_text(record(evidence))
     print(
         f"[table] memo written to {memo_path} and the decision record to {record_path}, both against "
-        f"snapshot {evidence['document']['snapshot_id']}"
+        f"snapshot {evidence['document'].snapshot_id}"
     )
     return {"memo": memo_path, "record": record_path}
 

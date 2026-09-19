@@ -25,7 +25,7 @@ The chosen option is the one already held, so its cost is the ongoing policy boo
 
 ## 5. Limitations
 
-One panel, eleven sleeves, 191 months of which 131 are traded, one mandate and one currency. Sixteen cells tested at a family-wise bar leave a resolution limit on every row. Cost is charged at a single per-side multiple with a sensitivity run beside it, and market impact and capacity are outside the panel. The multiple-testing correction is a self-imposed discipline. The exercise is a simulation and nothing here is advice or a client communication.
+One panel, 11 sleeves, 191 months of which 131 are traded, one mandate and one currency. Sixteen cells tested at a family-wise bar leave a resolution limit on every row. Cost is charged at a single per-side multiple with a sensitivity run beside it, and market impact and capacity are outside the panel. The multiple-testing correction is a self-imposed discipline. The exercise is a simulation and nothing here is advice or a client communication.
 
 ## 6. Falsification conditions
 

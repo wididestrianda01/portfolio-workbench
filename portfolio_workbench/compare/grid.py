@@ -47,7 +47,7 @@ import pandas as pd
 
 from ..construct import constraints, families, means
 from ..data import loader, universe
-from ..evaluate import walkforward
+from ..evaluate import metrics, walkforward
 from ..factors import exposures
 from ..risk import covariance as covariance_module
 from . import registry
@@ -213,8 +213,8 @@ def run_cell(spec, returns, months, cache=None):
         "first_traded": str(index[0]),
         "last_traded": str(index[-1]),
         "turnover_mean": float(turnover_series.mean()),
-        "turnover_annualised": float(turnover_series.mean() * 12),
-        "cost_annualised": float(constraints.cost(turnover_series.mean()) * 12),
+        "turnover_annualised": float(turnover_series.mean() * metrics.PERIODS_PER_YEAR),
+        "cost_annualised": float(constraints.cost(turnover_series.mean()) * metrics.PERIODS_PER_YEAR),
         "cap_binding_frequency": float(np.mean(cap_binding)),
         "cap_binding_steps": int(sum(value > 0 for value in cap_binding)),
         "turnover_cap_binding_steps": int(sum(turnover_binding)),
@@ -230,7 +230,7 @@ def run_cell(spec, returns, months, cache=None):
         "establishment": establishment,
         "gross_cumulative": float((1.0 + gross_series).prod() - 1.0),
         "net_cumulative": float((1.0 + net_series).prod() - 1.0),
-        "volatility_annualised": float(net_series.std(ddof=1) * np.sqrt(12)),
+        "volatility_annualised": float(net_series.std(ddof=1) * np.sqrt(metrics.PERIODS_PER_YEAR)),
         "estimator_intensity": float(np.mean(estimator_intensities)) if estimator_intensities else None,
         "components": sorted(set(counts)) if counts else None,
         "mean_intensity": float(np.mean(intensity_values)) if intensity_values else None,

@@ -22,7 +22,7 @@ The metric the question turns on is therefore tracking error rather than return:
 
 Across the 4 cells of the risk-model axis, tracking error moves over 1.75% (4.40% to 6.15%) and volatility over 1.76%. The family axis moves tracking error over 2.99% and volatility over 10.02% across its 7 cells. On this panel the risk-model choice therefore moves the outcome less than the constructor choice: swapping the covariance estimator changes the book, and it changes it by about a quarter as much as swapping the objective does.
 
-That reading has a stated precondition, and it is the one the risk layer reports: at sixty months and eleven sleeves the sample covariance's condition number makes the optimiser the object under test far more than the estimator. The three estimators differ in conditioning, and the matrix the shrinkage draws toward is a choice inside the estimator rather than a property of the panel, so the dispersion measured here is a lower bound on what a differently structured risk model would produce.
+That reading has a stated precondition, and it is the one the risk layer reports: at sixty months and 11 sleeves the sample covariance's condition number makes the optimiser the object under test far more than the estimator. The three estimators differ in conditioning, and the matrix the shrinkage draws toward is a choice inside the estimator rather than a property of the panel, so the dispersion measured here is a lower bound on what a differently structured risk model would produce.
 
 ## RQ3 - How much turns on the mean input?
 
@@ -47,7 +47,7 @@ The direction that matters for the rest of the build is the first: the published
 
 The rule retains 2 components on the full panel, and the per-window counts across the out-of-sample window take the values [1, 2], inside the pre-registered bound of 3. The rule's own falsification check does not fire (falsified: False, a move of more than one component in 0% of the steps), and the stability check on independently permuted windows agrees with the count.
 
-Two references travel with the count. The analytic Marchenko-Pastur edge for eleven series over a sixty-month window is 2.0397 to 2.0500 across the windows, and the matched permutation null the rule actually uses sits higher, at 2.0749 to 2.3301, because an independent permutation destroys the cross-sectional structure a normal null would keep. The observed top eigenvalue runs 4.2947 to 6.1801. The rule retains a component that beats the matched null rather than a component that beats an analytic line, and the evidence for the count is that comparison rather than an appeal to a common rule of thumb: Kaiser's eigenvalue-above-one rule would have retained a different, larger number here.
+Two references travel with the count. The analytic Marchenko-Pastur edge for 11 series over a sixty-month window is 2.0397 to 2.0500 across the windows, and the matched permutation null the rule actually uses sits higher, at 2.0749 to 2.3301, because an independent permutation destroys the cross-sectional structure a normal null would keep. The observed top eigenvalue runs 4.2947 to 6.1801. The rule retains a component that beats the matched null rather than a component that beats an analytic line, and the evidence for the count is that comparison rather than an appeal to a common rule of thumb: Kaiser's eigenvalue-above-one rule would have retained a different, larger number here.
 
 ## RQ6 - Is the risk budget consumed by design or by accident?
 
@@ -82,7 +82,7 @@ The table's resolution on a typical row is printed beside its verdict; a reader 
 
 ## Limitations
 
-**The panel is one panel.** Eleven UCITS sleeves, 191 months of which 131 are traded, one mandate and one currency. A difference that this design cannot resolve is not reported as an absence, and a difference it does resolve is a statement about this universe.
+**The panel is one panel.** 11 UCITS sleeves, 191 months of which 131 are traded, one mandate and one currency. A difference that this design cannot resolve is not reported as an absence, and a difference it does resolve is a statement about this universe.
 
 **The noise floor is stated, not implied.** Sixteen cells tested against two families give a family-wise bar that a real but modest advantage will not clear, and the smallest detectable difference is printed on every row. The bootstrap and the expanding protocol are the two further rungs, and a cell failing either is reported as no difference detected rather than as a small difference.
 
@@ -94,4 +94,4 @@ The table's resolution on a typical row is printed beside its verdict; a reader 
 
 ## What this memo does not establish
 
-No research question asks which family is best in general, and the panel cannot support the question: eleven sleeves, 191 months and one mandate give a comparison on this universe rather than a ranking of methods. The memo does not establish that the leader would repeat out of sample, that a cost of a few basis points a year is the whole cost, or that a verdict of no difference detected means two methods are equivalent. Nothing here is a claim about a live book, a client, or a regulated activity; the exercise is performed in role and the register says so on every artifact.
+No research question asks which family is best in general, and the panel cannot support the question: 11 sleeves, 191 months and one mandate give a comparison on this universe rather than a ranking of methods. The memo does not establish that the leader would repeat out of sample, that a cost of a few basis points a year is the whole cost, or that a verdict of no difference detected means two methods are equivalent. Nothing here is a claim about a live book, a client, or a regulated activity; the exercise is performed in role and the register says so on every artifact.

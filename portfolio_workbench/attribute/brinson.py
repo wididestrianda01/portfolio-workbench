@@ -40,6 +40,7 @@ import pandas as pd
 
 from ..construct import constraints
 from ..data import loader
+from ..evaluate import metrics
 
 # The papers this module implements, cited where their difference shows. 1985 is Brinson-Fachler, the
 # allocation term the report uses; 1986 is Brinson-Hood-BeeBower, which the hand-checked case runs
@@ -218,7 +219,7 @@ def cost_line(gross, net):
     difference = net - gross
     return {
         "mean_monthly": float(difference.mean()),
-        "annualised": float(difference.mean() * 12),
+        "annualised": float(difference.mean() * metrics.PERIODS_PER_YEAR),
         "drag": float((1.0 + net).prod() - (1.0 + gross).prod()),
         "convention": COST_CONVENTION,
     }

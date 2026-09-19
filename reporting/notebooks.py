@@ -259,9 +259,9 @@ print(f"sleeves {len(universe.TICKERS)}: {', '.join(universe.TICKERS)}")
 print(f"panel window {universe.WINDOW_START}..{universe.WINDOW_END}, as-of taken on the manifest's own date")
 ''',
         "reading": (
-            "The panel's shape is the resolution limit of every number downstream: 191 joined months "
-            "from 2010-09 to 2026-07, of which 131 are traded out of sample, and eleven sleeves of "
-            "which four are priced from the first month of the panel. A reader must not read a "
+            "The panel's shape is the resolution limit of every number downstream: the joined months the "
+            "provenance cell above prints, of which the out-of-sample window is the part the cells trade, "
+            "and eleven sleeves of which four are priced from the first month of the panel. A reader must not read a "
             "coverage gap as a verdict on the sleeve: the emerging-market sleeve is absent by "
             "decision rather than by data failure, and a sleeve that starts late is reported with its "
             "start rather than filled backwards. Nor is a thin liquidity warning a statement about "
@@ -485,7 +485,7 @@ print(f"permutation draws per window {components.DRAWS}, seed {components.SEED}"
             "The test assets are the sleeves, the factors are the named set, and the regression runs "
             "on the months both cover at the count the retention rule holds. Both directions are run "
             "on the same month set, so the two p-values are comparable. The premium estimate is "
-            "descriptive: with eleven series and 131 out-of-sample months the second pass is "
+            "descriptive: with eleven series and one out-of-sample window the second pass is "
             "underpowered, and the layer says so rather than reporting a t-statistic as a result."
         ),
         "example_note": (
@@ -740,10 +740,11 @@ print(f"estimation window {exposures.WINDOW} months, out-of-sample months only")
 ''',
         "reading": (
             "The engine's output is a decision about what a month may see, and its resolution limit "
-            "is the panel: 131 traded months is what the sixty-month requirement leaves of 191. The "
-            "planted break in the acceptance fixture is the evidence that the assertion fires rather "
-            "than merely existing. A reader must not read the first window's shorter observation "
-            "count as a data gap: the panel simply starts there, and the step records it."
+            "is the panel: the months the engine trades are what the sixty-month estimation requirement "
+            "leaves of the joined calendar. The planted break in the acceptance fixture is the evidence "
+            "that the assertion fires rather than merely existing. A reader must not read the first "
+            "window's shorter observation count as a data gap: the panel simply starts there, and the "
+            "step records it."
         ),
         "not_establish": (
             "Nothing here establishes that the protocol matches how a manager would actually trade. "
@@ -959,10 +960,10 @@ print(f"additivity tolerance {euler.ADDITIVITY_TOLERANCE:.0e} relative, checked 
         ),
         "contract": (
             "The cell list is declared before any cell runs and is validated at import time, so the "
-            "pre-registered count is a fact about the code. Each cell trades the same 131 "
-            "out-of-sample months on the same constraint set and the same cost convention, and each "
-            "writes a manifest keyed to the snapshot it read. The runner charges cost on traded "
-            "notional, step by step, along the path the book actually took."
+            "pre-registered count is a fact about the code. Each cell trades the same out-of-sample "
+            "months on the same constraint set and the same cost convention, and each writes a manifest "
+            "keyed to the snapshot it read. The runner charges cost on traded notional, step by step, "
+            "along the path the book actually took."
         ),
         "example_note": (
             "The grid's own claim is that its cell list was fixed before the runs, so the worked "
@@ -1096,17 +1097,21 @@ print("the gate is available_from <= the moment read, and nothing else")
         ),
         "example_note": (
             "The bars are numbers before anything is run, so the worked example computes them: the "
-            "family-wise bar over sixteen cells, the haircut it produces, and the resolution a paired "
-            "test of two identical series reports."
+            "family-wise bar over the pre-registered cells, the haircut it produces, and the resolution "
+            "a paired test of two identical series reports."
         ),
         "example": '''
 import numpy as np
+from scipy.stats import norm
 
+from portfolio_workbench.compare import registry
 from portfolio_workbench.evaluate import statistics
 
-# The bar over sixteen cells, and the same test read as the multiple-testing haircut.
-bar = statistics.family_wise_bar(16)
-assert abs(bar - 2.7344) < 5e-4, bar
+# The bar over the pre-registered cells, read from the cell list rather than typed in, and held to the
+# identity the function claims: the one-sided normal quantile at the family-wise level.
+cells = len(registry.CELLS)
+bar = statistics.family_wise_bar(cells)
+assert abs(bar - norm.ppf(1.0 - statistics.ALPHA / cells)) < 1e-12, bar
 assert statistics.haircut(3.0, bar)["clears"] is True
 assert statistics.haircut(2.0, bar)["clears"] is False
 
@@ -1115,7 +1120,7 @@ assert statistics.haircut(2.0, bar)["clears"] is False
 same = np.array([0.001, -0.002, 0.003, 0.0005])
 paired = statistics.paired(same, same, np.zeros(4))
 assert paired["degenerate"] is True and paired["statistic"] == 0.0
-print(f"bar over sixteen cells {bar:.4f}; identical series report a degenerate paired test")
+print(f"bar over {cells} cells {bar:.4f}; identical series report a degenerate paired test")
 ''',
         "parameters": '''
 from portfolio_workbench.evaluate import metrics, statistics
