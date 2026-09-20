@@ -37,9 +37,12 @@ from .risk import covariance
 # The revision this boundary is released at, read back by a consumer that pinned the tag. It moves when
 # the modules below move, which is what makes it worth reading: the layers behind these names changed
 # after 1.0 - the loader hands back a named document, the step block returns its own count, the table
-# takes its arguments in the other order - so a consumer importing this file at 1.0 and at 1.1 is
-# calling two different engines, and the constant is how it can tell.
-VERSION = "1.1"
+# takes its arguments in the other order - and they moved again at 1.2, where `paired` takes the bar its
+# row is decided at and reports its resolution against that bar rather than against the nominal one, and
+# where the table's ladder splits the leader's rank retention from a cell's own sign retention instead of
+# reporting both as an advantage that failed. A consumer importing this file at 1.0, at 1.1 and at 1.2 is
+# calling three different engines, and the constant is how it can tell.
+VERSION = "1.2"
 
 # The contract a consumer satisfies before calling anything else here: the manifest it writes, the
 # loader that reads one back and fails closed on a mismatch, the as-of rule every join is gated on, the

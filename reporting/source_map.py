@@ -53,7 +53,11 @@ SHARED = {
     ),
     "compare/table.py": (
         "the verdict ladder of this effort's evaluation design, and the three things that travel with every "
-        "verdict: the resolution limit, the negative results and the provenance block"
+        "verdict: the resolution limit at the bar that decided the row, the negative results and the "
+        "provenance block. The ladder keeps two bootstrap questions apart rather than one - a cell's own "
+        "sign retention, which asks whether its advantage over the benchmark is measured, and the leader's "
+        "rank retention, which asks whether one cell is uniquely best - and a row failing the second is "
+        "refused a recommendation in words that name the ranking rather than the advantage"
     ),
     "construct/constraints.py": (
         "the mandate's constraint set and trading conventions of this effort: long-only, fully invested, a "
@@ -366,7 +370,9 @@ OVERRIDES = {
         ),
         "rank_retention": (
             "the bootstrap rank retention of the evaluation design, with the 80% floor declared before the "
-            "resamples were drawn"
+            "resamples were drawn: two statistics and two questions, the leader's share of resamples in "
+            "which it stays ahead of the other cells, and each cell's own share of resamples in which its "
+            "advantage keeps the sign it had on the full sample"
         ),
         "haircut": (
             "the multiple-testing haircut, self-imposed from the literature: nothing located imposes a "

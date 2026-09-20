@@ -511,9 +511,11 @@ separate two methods: nearly every method sits inside every other's interval. **
 therefore a paired test on the difference of the two monthly return series**, which is legitimate only
 because the cells are highly correlated with one another, sharing a universe, a set of months and
 long-only books. The paired standard error at the realised correlation is much smaller, and the
-smallest difference the design detects at 80% power is of the order of 0.27 in information-ratio terms.
-That number is what gets printed beside every verdict of "no difference detected", and it is the
-difference between a finding and an absence of one.
+smallest difference the design detects at 80% power is of the order of 0.36 in information-ratio terms:
+that is the bar the row decided at plus the power quantile times the standard error, and it is what gets
+printed beside every verdict of "no difference detected". It is the difference between a finding and an
+absence of one, and it is quoted at the bar that decided the row rather than at the nominal five percent,
+which would print a figure a third smaller and describe a test the row was not decided by.
 
 The engine walks forward. Each cell is estimated on a rolling {exposures.WINDOW} months, refitted
 monthly, and trades only inside the window: an estimate formed at the close of a month never reads the
@@ -527,11 +529,17 @@ constraint-binding frequency are reported beside them. The information ratio is 
 mandate is benchmarked and because an active decision is judged on the risk it takes away from the
 benchmark, not on its own volatility. The Sharpe ratio is what was measured, then set aside.
 
-**Four verdicts, one ladder.** A cell is called different only when it clears the family-wise bar at
-`|z| >= {sheet['bar']:.4f}`, keeps its rank in at least {statistics.RANK_RETENTION_FLOOR:.0%} of
-{statistics.BOOTSTRAP_DRAWS} bootstrap resamples of its monthly returns, and holds its sign under the
-expanding protocol. Failing any rung produces one of: no difference detected, a declared negative result
-where the book reproduces equal weight, or a statement that the expanding leg was not run for that cell.
+**Four verdicts, one ladder, and two of its rungs ask different questions.** A cell is called different
+only when it clears the family-wise bar at
+`|z| >= {sheet['bar']:.4f}`, keeps the sign of its own advantage in at least
+{statistics.RANK_RETENTION_FLOOR:.0%} of {statistics.BOOTSTRAP_DRAWS} bootstrap resamples of its monthly
+returns, and holds that sign under the expanding protocol. Failing any rung produces one of: no difference
+detected, a declared negative result where the book reproduces equal weight, or a statement that the
+expanding leg was not run for that cell. The resampling contributes two statistics and they are not
+interchangeable: a cell's own sign retention asks whether its advantage over the benchmark is measured,
+and the leader's **rank retention** asks whether one cell is uniquely best among the cells. A leader that
+passes the first and fails the second is refused a recommendation, because the design requires every rung,
+and its row is worded as a ranking that was not resolved rather than as an advantage that was not found.
 Sixteen cells tested against two families imply a bar well past the nominal five percent, and that is the
 point: testing this many methods against one universe and reporting the winner is how research finds
 differences that do not exist. The bar used is
@@ -624,6 +632,7 @@ def _part_reading(evidence):
     rows = sheet["rows"]
     leader = sheet["retention"]["leader"]
     leader_row = next(row for row in rows if row["cell"] == leader)
+    own = sheet["retention"]["cells"][leader]["retention"]
     behind = [row for row in rows if row["verdict"] == table_module.BEHIND]
     negatives = table_module.negative_results(sheet)
     holding = evidence["holding"]
@@ -642,19 +651,21 @@ metric the question turns on is therefore tracking error rather than return: wha
 families is how much risk they take away from the benchmark, and a family that takes more away is not
 thereby better.
 
-**The direction is not the one a ranking would suggest.** {len(behind)} cells that differ from the policy
-benchmark on the paired test sit significantly *behind* it once cost is charged. That is a statement
-about cost and about the benchmark, not about the methods being poor: the policy book is a reasonable
-diversified book, and the bar it sets is a real one.
+**The direction cuts both ways.** {len(behind)} cells that differ from the policy benchmark on the paired
+test sit significantly *behind* it once cost is charged, and the cells that sit significantly *ahead* of it
+are the ones carrying a mean input. The first is a statement about cost and about the benchmark rather
+than about the methods being poor: the policy book is a reasonable diversified book, and the bar it sets
+is a real one.
 
-**The sample's leader does not survive resampling.** The best information ratio on the full sample is
-`{leader}` at {leader_row['information_ratio']:+.3f}, and it keeps its rank in only
-{sheet['retention']['retention']:.1%} of {statistics.BOOTSTRAP_DRAWS} resamples against a floor of
-{statistics.RANK_RETENTION_FLOOR:.0%} declared in advance. Its target path moves
-{leader_row['weight_stability']:.2%} a month, which is among the largest movements in the table. An
-advantage that does not survive resampling and a weight path that moves when the estimation window shifts
-by one month are the two signatures of a method exploiting estimation error, and both are present. This
-is a result, not a failure of the exercise: it is what the evaluation was built to detect.
+**The sample's leader has an advantage the resampling keeps and a rank it does not.** The best
+information ratio on the full sample is `{leader}` at {leader_row['information_ratio']:+.3f}. It keeps the
+sign of that advantage in {own:.1%} of {statistics.BOOTSTRAP_DRAWS} resamples, above the
+{statistics.RANK_RETENTION_FLOOR:.0%} floor declared in advance, and holds it under the expanding
+protocol; it keeps its **rank** ahead of the other cells in {sheet['retention']['retention']:.1%} of the
+same resamples, below that floor. Its target path moves {leader_row['weight_stability']:.2%} a month,
+which is among the largest movements in the table and is the honest signature of a method leaning on its
+estimates. These are two different findings. The advantage is measured and the ordering of the near-tied
+cells is not, and a reader who takes the second for the first has read a ranking as an absence.
 
 **The risk budget is consumed by accident rather than by design.** The realised group contributions are
 reported against the declared vector for the policy book and the leader, and the largest departure on the
@@ -677,49 +688,80 @@ reconciles to {link_worst:.0e} relative, the Euler contributions add to {additiv
 on every run, and the factor model's unexplained part is reported as its own measured quantity. Nothing
 in the table is a forecast, and no cell's row supports a claim about a live book.
 
-**Three separate statements are easy to confuse, and the documents keep them apart.** A cell can differ
-from the benchmark, a cell can be the sample's leader, and a cell can be worth adopting. The first is a
-test result, the second is a rank, and the third requires the first to survive every rung of the ladder
-and the cost of the change to be worth paying. On this panel nothing reaches the third, which is why the
-decision record recommends changing nothing rather than nominating the leader."""
+**Four separate statements are easy to confuse, and the documents keep them apart.** A cell can differ
+from the benchmark, a family of cells can differ from it, a cell can be the sample's leader, and a cell
+can be worth adopting. The first two are test results, the third is a rank, and the fourth requires the
+first to survive every rung of the ladder and the cost of the change to be worth paying. On this panel
+nothing reaches the fourth, so the record nominates no cell; the second is what its recommendation rests
+on, and the gap between the second and the fourth is the reason the ladder and the axis are reported side
+by side."""
 
 
 def _part_conclusion(evidence):
     sheet = evidence["sheet"]
     document = evidence["document"]
-    traded = evidence["analysis"].traded
+    traded = len(evidence["analysis"].traded)
+    by_cell = {row["cell"]: row for row in sheet["rows"]}
+    leader = sheet["retention"]["leader"]
+    holding_mean = sorted(
+        (
+            row
+            for row in sheet["rows"]
+            if row["cell"] in memo_module.MEAN_CELLS and row["information_ratio"] > 0.0
+        ),
+        key=lambda row: row["information_ratio"],
+        reverse=True,
+    )
+    own = sheet["retention"]["cells"][leader]["retention"]
+    gap = holding_mean[0]["information_ratio"] - holding_mean[1]["information_ratio"]
+    retention = ", ".join(f"{row['retention']:.0%}" for row in holding_mean)
+    turnover = f"{min(row['turnover_annualised'] for row in holding_mean):.1%} to {max(row['turnover_annualised'] for row in holding_mean):.1%}"
+    cost = f"{min(row['cost_annualised'] for row in holding_mean):.2%} to {max(row['cost_annualised'] for row in holding_mean):.2%}"
     return f"""## 7. The conclusion, in the committee's terms
 
-**The recommendation is to retain the policy benchmark and change nothing.** No cell cleared every rung
-of the declared ladder. The leader cleared the family-wise bar and failed the rank-retention rung, so its
-advantage is the ranking of this sample rather than a property of the method, and a committee that
-adopted it would be paying trading cost to buy estimation error. The negative result is the finding, and
-publishing it is the point of having built the evaluation this way rather than reaching for a winner.
+**Move the objective to a mean-input mean-variance construction, and do not claim a variant.** No cell
+cleared every rung of the declared ladder: the leader cleared the family-wise bar, kept the sign of its own
+advantage in {own:.1%} of resamples and held it under the expanding protocol, and failed the rung that asks
+whether one cell is uniquely best ({sheet['retention']['retention']:.1%} against the
+{statistics.RANK_RETENTION_FLOOR:.0%} floor). The ladder names no cell, and the record does not either.
+What the same table supports is the axis those cells share: all {len(holding_mean)} of the cells carrying a
+mean input clear the family-wise bar on their own row, keeping the sign of the advantage in {retention} of
+resamples, while the cell that carries no mean clears nothing and returns
+{by_cell['mean_variance_none']['information_ratio']:+.3f}. The construction is recommended and the variant
+is not, because the leading two sit {gap:.3f} apart on the information ratio against a resolution of
+{holding_mean[0]['paired_benchmark']['resolution']:.2f} on the leading row.
 
-The practical value runs in three directions. For the mandate, the cost of the decision is nil: the book
-is already held, its turnover is zero, and the alternative was to pay a construction cost to move to a
-book whose advantage the data does not support. For the method, the exercise quantifies how much of a
-methodological choice survives when cost, multiple testing and resampling are charged against it, which
-is a far more useful quantity than a ranking of in-sample fits. For the reader, the artifacts are a
+The practical value runs in three directions. For the mandate, the decision is a partial tilt rather than a
+replacement: the family trades {turnover} a year and costs {cost} of return a year, which its advantage
+survives, and the tilt is sized so that the mandate's volatility and its declared risk budget stay where
+the mandate put them. For the method, the exercise quantifies how much of a methodological choice survives
+when cost, multiple testing and resampling are charged against it, and it keeps apart the two questions
+resampling can answer - whether an advantage is measured, and whether a ranking is - which is a more
+useful quantity than a ranking of in-sample fits. For the reader, the artifacts are a
 worked example of the whole chain, from a licensed data source through a look-ahead-free panel, a
 documented risk model, constrained construction, a paired out-of-sample evaluation and two
 decompositions, with every number traceable to the module that computed it.
 
-**Five conditions would reopen the decision**, and they are stated in the record rather than implied. A
-rerun that no longer reproduces the metric table within the stated tolerance invalidates the exercise. A
-cell that clears the bar, keeps its rank in at least {statistics.RANK_RETENTION_FLOOR:.0%} of resamples
-and holds its sign under the expanding protocol becomes a candidate. A longer panel on which a difference
-absent here remains absent while the resolution limit falls below it would turn an absence into
-evidence. A revised cost multiple that removes the leader's advantage would remove the only support it
-had. And a change to the constraint set would make a family's result a result about the constraints,
-which the perturbation runs already exist to measure. The recommendation is withdrawn or revisited when
-one of those holds, and not before.
+**Six conditions would reopen the decision**, and they are stated in the record rather than implied. A
+rerun that no longer reproduces the metric table within the stated tolerance invalidates the exercise. The
+cells carrying a mean losing the bar or the sign of their advantage, on this snapshot or a longer panel,
+withdraws the recommendation, because it rests on those rows. The cap binding far enough to make the
+result one about the constraint set would do the same, which the perturbation runs already exist to
+measure. So would a decision to treat the declared risk budget as a constraint rather than a report and a
+mean-input book that cannot then be sized to the mandate's volatility. A cell that clears the bar, keeps
+the sign of its own advantage in at least {statistics.RANK_RETENTION_FLOOR:.0%} of resamples, holds that
+sign under the expanding protocol and keeps its rank in at least
+{statistics.RANK_RETENTION_FLOOR:.0%} of the same resamples becomes a candidate, and the record would
+then name it rather than the axis. And a longer panel on which a difference absent here remains absent
+while the resolution limit falls below it would turn an absence into evidence, so the risk-based families
+would have to be reread. The recommendation is withdrawn or revisited when one of those holds, and not
+before.
 
 **The scope stays stated.** One panel, {len(universe.TICKERS)} sleeves, {len(document.months)} months of
-which {len(traded)} are traded, one mandate and one currency. The exercise is a simulation performed in
+which {traded} are traded, one mandate and one currency. The exercise is a simulation performed in
 role, with no client and no institution, and nothing here is investment advice or a client communication.
 A reader who takes one of these numbers should take its resolution limit with it, and a reader who takes
-the recommendation should take the five conditions with it."""
+the recommendation should take the six conditions with it."""
 
 
 # The glossary, as (term, definition, where it is used, and its source). Every term here appears in the

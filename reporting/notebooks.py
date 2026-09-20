@@ -1138,10 +1138,12 @@ assert statistics.haircut(3.0, bar)["clears"] is True
 assert statistics.haircut(2.0, bar)["clears"] is False
 
 # Two identical books leave no variance for the standard error, and the test says so rather than
-# dividing by a rounding error.
+# dividing by a rounding error. The bar is passed in rather than assumed, because the resolution the
+# test returns is a statement about the test that decides with it.
 same = np.array([0.001, -0.002, 0.003, 0.0005])
-paired = statistics.paired(same, same, np.zeros(4))
+paired = statistics.paired(same, same, np.zeros(4), bar)
 assert paired["degenerate"] is True and paired["statistic"] == 0.0
+assert paired["bar"] == bar
 print(f"bar over {cells} cells {bar:.4f}; identical series report a degenerate paired test")
 ''',
         "parameters": '''
@@ -1154,13 +1156,16 @@ print(f"annualisation {metrics.PERIODS_PER_YEAR} periods, sub-periods {[name for
         "reading": (
             "The resolution limit is the line that makes the table readable: **no difference "
             "detected** means the difference is smaller than this panel can resolve, not that the "
-            "methods are equivalent, and the smallest detectable information-ratio difference is "
-            "printed on every row. The bootstrap's rank retention is the second bar, because a cell "
-            "whose advantage does not keep its rank across resamples is the leader of this sample "
-            "rather than of the strategy. A reader must not read the table as a recommendation about "
-            "portfolio construction in general: it reports which methodological choice moved which "
-            "metric on one European multi-asset panel out of sample, and the negative results are "
-            "published as results."
+            "methods are equivalent, and the smallest detectable information-ratio difference at the "
+            "bar the row decided at is printed on every row. The bootstrap contributes two different "
+            "statistics and they are not interchangeable: a cell's own sign retention asks whether its "
+            "advantage over the benchmark is measured, and the leader's rank retention asks whether one "
+            "cell is uniquely best. A leader that passes the first and fails the second is refused a "
+            "recommendation because the design's acceptance rule requires every leg, and its row says "
+            "which leg failed rather than reporting the advantage as an absence. A reader must not read "
+            "the table as a recommendation about portfolio construction in general: it reports which "
+            "methodological choice moved which metric on one European multi-asset panel out of sample, "
+            "and the negative results are published as results."
         ),
         "not_establish": (
             "Nothing here establishes which family is best beyond this panel and this mandate, and "

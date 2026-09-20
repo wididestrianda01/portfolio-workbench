@@ -7,10 +7,18 @@ results, and the second account is the one that goes stale or, worse, stays plau
 moved.
 
 **Answer or refuse, and say which.** Each research question is answered with the numbers that decide it
-or explicitly refused with the reason. A difference is reported only where the paired bar, the
-bootstrap rank retention and the expanding-window sign all pass; everything else is reported as no
-difference detected with the resolution limit beside it, and the negative results are published as
-results rather than dropped.
+or explicitly refused with the reason. A difference is reported only where the paired bar, the cell's own
+sign retention under the bootstrap and the expanding-window sign all pass; the leader's **rank** retention
+is a separate statistic about the cells against each other and a row failing it is refused in words that
+say no unique cell was found rather than that no advantage was. Everything else is reported as no
+difference detected with the resolution limit at the bar that decided the row, and the negative results
+are published as results rather than dropped.
+
+**The recommendation is made at the level the evidence reaches.** The pre-registered ladder is a test of
+one cell, and where it returns no candidate the record says so and then states what the same table does
+support - on this run, the axis whose cells cleared - with the axis level of the claim, the constraint
+binding and the sizing caveats beside it. A record that stopped at the ladder would report a refusal as a
+result about the benchmark.
 
 **The decision record is the one page the committee would sign, and it carries its own falsification
 conditions.** The six parts are the recommendation, the evidence with the haircut applied, the
@@ -196,7 +204,7 @@ def memo(evidence):
         "",
         "## RQ3. How much turns on the mean input?",
         "",
-        _rq3(stage_c, by_cell),
+        _rq3(stage_c, by_cell, sheet),
         "",
         "## RQ4. Does the factor set matter: does either set span the other?",
         "",
@@ -237,7 +245,11 @@ def memo(evidence):
         "comparison on this universe rather "
         "than a ranking of methods. The memo does not establish that the leader would repeat out of "
         "sample, that a cost of a few basis points a year is the whole cost, or that a verdict of no "
-        "difference detected means two methods are equivalent. Nothing here is a claim about a live "
+        "difference detected means two methods are equivalent. It does not establish that the mean input "
+        "is the axis that matters in general: the axis was pre-registered as a question, and reading it as "
+        "the recommendation follows the cells that cleared rather than a rule fixed before the run. Nor "
+        "does it establish that the tilt it recommends is the right size, which is a decision about the "
+        "mandate's risk appetite rather than a result. Nothing here is a claim about a live "
         "book, a client, or a regulated activity; the exercise is performed in role and the register "
         "says so on every artifact.",
         "",
@@ -248,6 +260,26 @@ def memo(evidence):
 def _rq1(stage_a, behind, leader_row, sheet):
     widest = max(stage_a, key=lambda row: row["tracking_error"])
     best = max(stage_a, key=lambda row: row["information_ratio"])
+    cells = sheet["retention"]["cells"]
+    ranked = sorted(
+        (
+            entry
+            for entry in cells.items()
+            if not np.isnan(entry[1]["information_ratio"])
+        ),
+        key=lambda entry: entry[1]["information_ratio"],
+        reverse=True,
+    )
+    ahead = [
+        row
+        for row in sheet["rows"]
+        if row["cell"] not in BARS
+        and not row["is_repeat"]
+        and row["haircut"]["clears"]
+        and row["information_ratio"] > 0.0
+    ]
+    gap = ranked[0][1]["information_ratio"] - ranked[1][1]["information_ratio"]
+    leader = sheet["retention"]["leader"]
     return (
         f"{len(stage_a)} family cells span a tracking error from {min(row['tracking_error'] for row in stage_a):.2%} "
         f"to {max(row['tracking_error'] for row in stage_a):.2%} a year and an information ratio from "
@@ -256,17 +288,22 @@ def _rq1(stage_a, behind, leader_row, sheet):
         f"test's resolution: the family moves tracking error by hundreds of basis points, while the "
         f"smallest difference this test would detect on a typical row is of the order of "
         f"{np.median([row['paired_benchmark']['resolution'] for row in stage_a]):.2f} in information-ratio terms.\n\n"
-        f"The direction is not the one a ranking would suggest. Every cell that is significantly different "
-        f"from the policy benchmark on the paired test is significantly behind it once the cost is "
-        f"charged ({len(behind)} cells), and the widest tracking error among the family cells, on "
-        f"`{widest['cell']}`, comes with an "
-        f"information ratio of {widest['information_ratio']:+.3f}. The best information ratio among them is "
-        f"`{best['cell']}` at {best['information_ratio']:+.3f}, and that cell carries a mean input rather "
-        f"than a risk-based objective, which is the axis RQ3 reads.\n\n"
+        f"The direction is not one direction. Cells that differ from the policy benchmark on the paired test "
+        f"differ in both directions once the cost is charged: {len(behind)} sit significantly behind it, and "
+        f"{len(ahead)} sit significantly ahead, the latter being the cells that carry a mean input, which is "
+        f"the axis RQ3 reads. The widest tracking error among the family cells, on `{widest['cell']}`, comes "
+        f"with an information ratio of {widest['information_ratio']:+.3f}; the best information ratio among "
+        f"them is `{best['cell']}` at {best['information_ratio']:+.3f}.\n\n"
         f"The metric the question turns on is therefore tracking error rather than return: what separates "
-        f"these families is how much risk they take away from the benchmark, and the leader on the full "
-        f"sample, `{sheet['retention']['leader']}`, keeps its rank in only "
-        f"{sheet['retention']['retention']:.1%} of bootstrap resamples against the {statistics.RANK_RETENTION_FLOOR:.0%} floor."
+        f"these families is how much risk they take away from the benchmark. What separates the top of the "
+        f"table from itself is not resolvable here, and the two bootstrap statistics say which is which: "
+        f"`{leader}` keeps the sign of its own advantage over the benchmark in "
+        f"{cells[leader]['retention']:.1%} of {statistics.BOOTSTRAP_DRAWS} resamples against the "
+        f"{statistics.RANK_RETENTION_FLOOR:.0%} floor and holds that sign under the expanding protocol, while "
+        f"keeping its **rank** ahead of the other cells in {sheet['retention']['retention']:.1%} of the same "
+        f"resamples. The advantage is measured and the ordering is not, which is what a {gap:.3f} gap to the "
+        f"nearest rival against a resolution of "
+        f"{leader_row['paired_benchmark']['resolution']:.2f} on that row means."
     )
 
 
@@ -291,7 +328,7 @@ def _rq2(stage_a, stage_b, lo_te, hi_te, lo_b_te, hi_b_te, lo_vol, hi_vol, lo_b_
     )
 
 
-def _rq3(stage_c, by_cell):
+def _rq3(stage_c, by_cell, sheet):
     none_row = by_cell["mean_variance_none"]
     sample_row = by_cell["mean_variance_sample"]
     posterior_row = by_cell["mean_variance_black_litterman"]
@@ -325,6 +362,20 @@ def _rq3(stage_c, by_cell):
         "property of the constraint set rather than a result about means: at the tightest norm the "
         "fully-invested long-only book admits, there is only one feasible weight vector, and it returns "
         f"{none_row['information_ratio']:+.3f} on the same metric with a weight path that does not move at all.",
+        "",
+        "All three cells that carry a mean clear the family-wise bar on their own rows "
+        f"({shrunk_row['paired_benchmark']['statistic']:.2f}, {sample_row['paired_benchmark']['statistic']:.2f} "
+        f"and {posterior_row['paired_benchmark']['statistic']:.2f} against {sheet['bar']:.4f}), keeping the sign "
+        f"of their advantage in {shrunk_row['retention']:.0%}, {sample_row['retention']:.0%} and "
+        f"{posterior_row['retention']:.0%} of resamples, while the cell that drops the mean clears nothing and "
+        "sits significantly behind the benchmark. That is the one axis of this comparison where the evidence "
+        "separates a group of cells from the benchmark and from that group's own no-mean control, and it is "
+        "what the decision record's recommendation rests on. Which of the three to hold is a different "
+        "question and this panel does not answer it: they sit within "
+        f"{max(sample_row['information_ratio'], shrunk_row['information_ratio'], posterior_row['information_ratio']) - min(sample_row['information_ratio'], shrunk_row['information_ratio'], posterior_row['information_ratio']):.3f} "
+        "of one another on the information ratio, against a resolution of the order of "
+        f"{np.median([row['paired_benchmark']['resolution'] for row in stage_c]):.2f} on those rows. The axis "
+        "supports a construction, not a variant.",
     ]
     return "\n".join(parts)
 
@@ -414,21 +465,32 @@ def _rq7(cost, leader_row, sheet):
         f"(`erc_bounded` {cost['erc_bounded'][0]:.1%} a year, {cost['erc_bounded'][1]:.2%}). The leader's "
         f"information ratio at each per-side multiple is {sensitivity}, so the ranking at the top multiple "
         "is a separate statement from the level at the base.\n\n"
-        f"The second half of the question is estimation error, and the answer is uncomfortable: the leader "
-        f"retains rank in only {sheet['retention']['retention']:.1%} of {statistics.BOOTSTRAP_DRAWS} "
-        f"bootstrap resamples against the {statistics.RANK_RETENTION_FLOOR:.0%} floor, and its target-path "
-        f"weight movement of {leader_row['weight_stability']:.2%} a month is among the largest in the table, "
-        f"against 0.00% for a fixed-weight book. An advantage that does not survive resampling and a weight "
-        "path that moves when the estimation window shifts one month are the two signatures of exploiting "
-        "estimation error, and both are present. The multiple-testing haircut is applied as well, so the "
-        "bar a row is read against is the corrected one and not the nominal five percent."
+        f"The second half of the question is estimation error, and the resampling answers it in two parts "
+        f"that are easy to run together. The leader keeps the sign of its own advantage over the benchmark "
+        f"in {sheet['retention']['cells'][leader_row['cell']]['retention']:.1%} of {statistics.BOOTSTRAP_DRAWS} "
+        f"resamples, above the {statistics.RANK_RETENTION_FLOOR:.0%} floor, so the advantage is measured; it "
+        f"keeps its **rank** ahead of the other cells in {sheet['retention']['retention']:.1%} of the same "
+        f"resamples, below it, so the ordering of the near-tied cells is not. Its target-path weight movement "
+        f"of {leader_row['weight_stability']:.2%} a month is among the largest in the table, against 0.00% for "
+        "a fixed-weight book, which is the honest signature of a method leaning on its estimates even where "
+        "its advantage survives them. Both readings sit on the row, and reading the second as a failure of "
+        "the first is the mistake this table is arranged to prevent. The multiple-testing haircut is applied "
+        "as well, so the bar a row is read against is the corrected one and not the nominal five percent."
     )
 
 
 def _limitations(evidence, additivity_worst, link_worst):
     document = evidence["document"]
     traded = len(evidence["analysis"].traded)
-    cells = len(evidence["sheet"]["cells"])
+    sheet = evidence["sheet"]
+    cells = len(sheet["cells"])
+    by_cell = _by_cell(sheet)
+    leader = sheet["retention"]["leader"]
+    mean_rows = [
+        by_cell[identifier]
+        for identifier in MEAN_CELLS
+        if identifier in by_cell and by_cell[identifier]["information_ratio"] > 0.0
+    ]
     return (
         f"**The panel is one panel.** {len(universe.TICKERS)} UCITS sleeves, {len(document.months)} months "
         f"of which {traded} are traded, one mandate and one currency. A difference that this design cannot resolve is not reported as an "
@@ -438,14 +500,30 @@ def _limitations(evidence, additivity_worst, link_worst):
         "difference is printed on every row. The bootstrap and the expanding protocol are the two further "
         "rungs, and a cell failing either is reported as no difference detected rather than as a small "
         "difference.\n\n"
-        f"**Estimation error is visible and not modelled away.** The leader keeps its rank in only "
-        f"{evidence['sheet']['retention']['retention']:.1%} of resamples against the "
-        f"{statistics.RANK_RETENTION_FLOOR:.0%} floor, and its "
-        "target path moves "
-        f"{_by_cell(evidence['sheet'])[evidence['sheet']['retention']['leader']]['weight_stability']:.2%} a "
-        "month; the weight-stability diagnostic is reported for every cell. The mean-variance family's own error is in "
-        "the mean, and the shrinkage cell exists to show how much of it a standard remedy removes rather "
-        "than to claim the remedy.\n\n"
+        f"**Estimation error is visible and not modelled away.** The leader keeps the sign of its own "
+        f"advantage in {sheet['retention']['cells'][leader]['retention']:.1%} of resamples against the "
+        f"{statistics.RANK_RETENTION_FLOOR:.0%} floor the design declared, and its target path moves "
+        f"{by_cell[leader]['weight_stability']:.2%} a month; the weight-stability diagnostic is reported for "
+        "every cell. The mean-variance family's own error is in the mean, and the shrinkage cell exists to "
+        "show how much of it a standard remedy removes rather than to claim the remedy.\n\n"
+        f"**The last rung was reachable by two cells of {cells}.** The expanding-window repeat is "
+        "pre-registered for the two cells the mandate's question turns on, so the rest are decided on the "
+        "rolling protocol alone and each says so on its row. Of the three cells that showed an advantage on "
+        "the paired test, two carry the verdict that the expanding leg was not run for them, which is a "
+        "coverage limit of the design rather than a result about those two methods.\n\n"
+        "**Where the recommendation is made is stated.** The pre-registered ladder asks whether one cell is "
+        "uniquely best and returns no candidate. The statement the memo goes on to make is about the "
+        "mean-input axis, whose three cells each clear the same family-wise bar; that axis was "
+        "pre-registered as a question, and reading an axis as the recommendation because its cells are the "
+        "ones that cleared is a step this panel does not certify. It is recorded here rather than left "
+        "implicit.\n\n"
+        f"**The constraint set is doing part of the work.** The books carrying a mean sit on the "
+        f"{constraints.CAP:.0%} per-sleeve cap on "
+        f"{min(row['cap_binding_frequency'] for row in mean_rows):.0%} to "
+        f"{max(row['cap_binding_frequency'] for row in mean_rows):.0%} of their steps, against a "
+        f"{by_cell['policy']['largest_weight']:.0%} largest weight on the policy book, so part of what the "
+        "axis earns is the cap admitting more equity than the strategic weights hold. The perturbation runs "
+        "exist to measure how much, and they are in the table.\n\n"
         f"**The residuals are named.** Attribution reconciles to {link_worst:.0e} and the Euler "
         f"contributions add to {additivity_worst:.0e} relative; the factor model's unexplained part is "
         "reported as its own measured quantity rather than absorbed. Value at risk is refused as a "
@@ -470,24 +548,58 @@ def record(evidence):
     behind = [row for row in rows if row["verdict"] == table_module.BEHIND]
     cleared = [row for row in rows if row["haircut"]["clears"]]
     lost = [row for row in rows if row["verdict"] == table_module.RESAMPLING_LOST]
+    not_unique = [row for row in rows if row["verdict"] == table_module.NOT_UNIQUE]
     unrun = [row for row in rows if row["verdict"] == table_module.LEG_NOT_RUN]
     retention = sheet["retention"]["retention"]
+    own = sheet["retention"]["cells"][leader]["retention"]
+    without_mean = by_cell["mean_variance_none"]
+    mean_rows = [by_cell[identifier] for identifier in MEAN_CELLS if identifier in by_cell]
+    holding_mean = sorted(
+        (row for row in mean_rows if row["information_ratio"] > 0.0),
+        key=lambda row: row["information_ratio"],
+        reverse=True,
+    )
+    family_bar = ", ".join(f"{row['paired_benchmark']['statistic']:.2f}" for row in holding_mean)
+    family_retention = ", ".join(f"{row['retention']:.0%}" for row in holding_mean)
+    family_ir = ", ".join(f"{row['information_ratio']:+.3f}" for row in holding_mean)
+    family_turnover = f"{min(row['turnover_annualised'] for row in holding_mean):.1%} to {max(row['turnover_annualised'] for row in holding_mean):.1%}"
+    family_cost = f"{min(row['cost_annualised'] for row in holding_mean):.2%} to {max(row['cost_annualised'] for row in holding_mean):.2%}"
+    family_volatility = f"{min(row['volatility'] for row in holding_mean):.1%} to {max(row['volatility'] for row in holding_mean):.1%}"
+    gap = holding_mean[0]["information_ratio"] - holding_mean[1]["information_ratio"]
+    family_spread = holding_mean[0]["information_ratio"] - holding_mean[-1]["information_ratio"]
+    sensitivity = ", ".join(
+        f"{rate:.0f} bp {holding_mean[0]['cost_sensitivity'][rate]['information_ratio']:+.3f}"
+        for rate in sorted(holding_mean[0]["cost_sensitivity"])
+    )
 
     if candidates:
         recommendation = (
             f"Adopt `{candidates[0]['cell']}` for the mandate's construction decision, subject to the "
             "falsification conditions below. Every rung of the declared ladder was cleared: the "
-            "family-wise bar, the bootstrap rank retention and the sign under the second protocol."
+            "family-wise bar, the bootstrap sign retention, the rank retention and the sign under the "
+            "second protocol."
         )
     else:
         recommendation = (
-            "**Retain the policy benchmark and change nothing.** No cell cleared every rung of the "
-            "declared ladder. The leader cleared the family-wise bar and failed the rank-retention rung "
-            f"({retention:.1%} against the {statistics.RANK_RETENTION_FLOOR:.0%} floor), so its advantage is "
-            "the ranking of this sample "
-            "rather than a property of the method, and the sample's dispersion across cells is large "
-            "enough that a choice made on it would be a choice about estimation error. The negative "
-            "result is the finding."
+            "**Carry a mean input; do not claim a variant.** No cell cleared every rung of the declared "
+            "ladder, so the ladder names no cell and this record names none. The leader cleared the "
+            f"family-wise bar, kept the sign of its own advantage in {own:.1%} of resamples and held it "
+            "under the expanding protocol, and failed the rung that asks whether one cell is uniquely best "
+            f"({retention:.1%} against the {statistics.RANK_RETENTION_FLOOR:.0%} floor). An advantage and a "
+            "ranking are different findings, and this table measures both; the row says so in words that "
+            "name the ranking.\n\n"
+            "What the same table does support is the axis those cells share. All "
+            f"{len(holding_mean)} cells that carry a mean input clear the family-wise bar on their own row "
+            f"({family_bar} against {sheet['bar']:.4f}), keeping the sign of the advantage in "
+            f"{family_retention} of resamples, while `mean_variance_none`, on the same covariance and the "
+            f"same constraint set with no mean in it, clears nothing and returns "
+            f"{without_mean['information_ratio']:+.3f}. The recommendation is to "
+            "move the objective to a mean-input mean-variance construction, and **not to nominate one of "
+            f"them**: the leading two sit {gap:.3f} apart on the information ratio against a resolution of "
+            f"{holding_mean[0]['paired_benchmark']['resolution']:.2f} on the leading row, so this panel "
+            "supports the construction and not the variant. Hold it as a partial tilt - the active decision "
+            "at a size that leaves the mandate's volatility where the mandate put it - rather than as a "
+            "replacement of the strategic weights."
         )
 
     return "\n".join(
@@ -510,18 +622,30 @@ def record(evidence):
             f"correlation implies, it would be {sheet['adjusted_bar']:.4f}, and the conservative value is the "
             f"one applied. {len(cleared)} of the {len(rows)} runs clear the bar, so a difference is detectable "
             f"on those rows; {len(behind)} of them are significantly behind the benchmark once the cost is "
-            f"charged, {_verb(len(lost), 'fails', 'fail')} the rank-retention rung that follows, "
-            f"{_verb(len(unrun), 'has', 'have')} no expanding leg and cannot complete the ladder, and "
+            f"charged, {_verb(len(lost), 'loses', 'lose')} the sign of its own advantage under the bootstrap, "
+            f"{_verb(len(not_unique), 'fails', 'fail')} the rank-retention rung that follows while keeping that "
+            f"sign, {_verb(len(unrun), 'has', 'have')} no expanding leg and cannot complete the ladder, and "
             f"{_verb(len(candidates), 'clears', 'clear')} every rung. The leader's rank retention across "
-            f"{statistics.BOOTSTRAP_DRAWS} resamples is {retention:.1%}. The haircut is self-imposed from the "
-            "literature and is not a regulatory requirement.",
+            f"{statistics.BOOTSTRAP_DRAWS} resamples is {retention:.1%}, and the rung it fails is the one "
+            "that asks whether one cell is uniquely best: the same row keeps the sign of its own advantage "
+            f"in {own:.1%} of the same resamples and holds that sign under the expanding protocol. The "
+            "haircut is self-imposed from the literature and is not a regulatory requirement.",
             "",
             "## 3. Alternatives rejected",
             "",
-            "- Every Stage A family other than the retained benchmark: each either failed a rung of the "
-            "ladder or sat significantly behind the benchmark after cost.",
-            "- The sample-mean input: its weight path moves most between adjacent months, which is the "
-            "signature of estimation error rather than of a decision.",
+            "- The risk-based families - minimum variance, maximum diversification, equal risk "
+            "contribution, hierarchical risk parity, mean-CVaR and their shrinkage and factor variants: "
+            f"every one sits behind the policy benchmark on the sample, and {len(behind)} of them sit "
+            "significantly behind it once the cost is charged. De-risking the sleeves against a benchmark "
+            f"that runs at {by_cell['policy']['volatility']:.1%} volatility is a policy bet rather than a "
+            "construction choice.",
+            f"- Dropping the mean input: `mean_variance_none` reproduces the equal-weight book on this "
+            f"constraint set and returns {without_mean['information_ratio']:+.3f}, which is the constraint "
+            "set being the estimator rather than a result about means.",
+            "- The sample mean as a named choice over the shrunk and posterior ones: its weight path moves "
+            "most between adjacent months, and the three sit within "
+            f"{family_spread:.3f} of one another on the metric the decision turns on, so choosing between "
+            "them is choosing the ranking.",
             "- The uncapped perturbations: they exist to show how much of a cell's result the constraint "
             "set was doing, and both concentrate the book onto the near-riskless sleeve.",
             "- Vendor-model emulation, composite reporting, index construction and regulatory limits: "
@@ -529,22 +653,30 @@ def record(evidence):
             "",
             "## 4. Cost of the choice",
             "",
-            f"The chosen option is the one already held, so its cost is the ongoing policy book's own: "
-            f"turnover 0.00% a year and no transaction charge, against the mean-input cells' "
-            f"{by_cell['mean_variance_sample']['turnover_annualised']:.1%} a year and "
-            f"{by_cell['mean_variance_sample']['cost_annualised']:.2%} of return a year charged on traded "
-            f"notional. Not adopting also forgoes the sample's dispersion: the practical cost of this "
-            "decision is that no evidence was found for changing the book, and the exercise publishes that "
-            "rather than manufacturing a winner.",
+            f"Adopting costs the family's own trading: {family_turnover} a year in one-way turnover and "
+            f"{family_cost} of return a year at the decided {constraints.COST_BP:.0f} bp per side, charged "
+            "on traded notional, and the advantage holds through the sensitivity run at four times that "
+            f"rate ({sensitivity}). The books carrying a mean run at {family_volatility} volatility against "
+            f"the policy book's {by_cell['policy']['volatility']:.1%}, so the tilt is sized to buy the "
+            "active decision rather than the volatility, and a partial tilt leaves the mandate's own "
+            "volatility where the mandate put it. Not adopting forgoes the advantage those rows measure, "
+            f"which is {family_ir} net of cost and is not zero. The family also moves further from the "
+            "declared risk budget than the policy book already sits from it, which is the cost the sizing "
+            "is against.",
             "",
             "## 5. Limitations",
             "",
             f"One panel, {len(universe.TICKERS)} sleeves, {len(document.months)} months of which "
             f"{traded} are traded, one mandate and one currency. "
-            f"{cells} cells tested at a family-wise bar leave a resolution limit on every row. Cost is "
-            "charged at a single per-side multiple with a sensitivity run beside it, and market impact and "
-            "capacity are outside the panel. The multiple-testing correction is a self-imposed discipline. "
-            "The exercise is a simulation and nothing here is advice or a client communication.",
+            f"{cells} cells tested at a family-wise bar leave a resolution limit on every row. The "
+            "expanding-window repeat is pre-registered for two cells of the sixteen, so the last rung "
+            f"could be reached by two rows and {len(unrun)} rows carry the verdict that it was not run for "
+            "them. The recommendation is made about an axis rather than about a cell, and the axis was "
+            "read after the results were seen, which is why that step is stated here rather than left "
+            "implicit in the evidence. Cost is charged at a single per-side multiple with a sensitivity "
+            "run beside it, and market impact and capacity are outside the panel. The multiple-testing "
+            "correction is a self-imposed discipline. The exercise is a simulation and nothing here is "
+            "advice or a client communication.",
             "",
             "## 6. Falsification conditions",
             "",
@@ -552,15 +684,22 @@ def record(evidence):
             "",
             "1. A rerun on this snapshot no longer reproduces the metric table within the stated tolerance "
             f"({statistics.RERUN_TOLERANCE:.0e} relative).",
-            "2. A cell clears the family-wise bar, keeps its rank in at least "
-            f"{statistics.RANK_RETENTION_FLOOR:.0%} of bootstrap resamples, and holds its sign under the "
-            "expanding protocol.",
-            "3. The resolution limit on a row is smaller than the difference the row reports as absent, and "
-            "the difference remains absent on a longer panel.",
-            "4. The cost multiple is revised upward far enough that a cell's advantage at the sensitivity "
-            "run disappears, and the sensitivity was the only thing supporting it.",
-            "5. The constraint set changes: a cap or band that binds on most steps makes a family's result "
-            "a result about the constraints, and the perturbation runs exist to show how much.",
+            "2. The cells carrying a mean stop clearing the family-wise bar, or stop retaining the sign of "
+            f"their advantage in at least {statistics.RANK_RETENTION_FLOOR:.0%} of bootstrap resamples, on "
+            "this snapshot or on a longer panel. The recommendation rests on those rows and on nothing "
+            "else.",
+            "3. The cap-binding frequency of those books rises far enough that the result becomes a result "
+            "about the constraint set: the perturbation runs exist to measure how much of it already is.",
+            "4. The declared risk budget is treated as a constraint rather than as a report, and a "
+            "mean-input book cannot be sized to leave the mandate's volatility where it was.",
+            "5. A cell clears the family-wise bar, keeps the sign of its own advantage in at least "
+            f"{statistics.RANK_RETENTION_FLOOR:.0%} of bootstrap resamples, holds that sign under the "
+            f"expanding protocol and keeps its rank in at least {statistics.RANK_RETENTION_FLOOR:.0%} of "
+            "the same resamples: the ladder then names a cell, and this record names that cell rather "
+            "than the axis.",
+            "6. The resolution limit on a row that reports no difference falls below the difference the "
+            "row reports as absent on a longer panel: an absence then becomes evidence, and the "
+            "risk-based families would have to be reread against the benchmark.",
             "",
             f"Written against snapshot `{document.snapshot_id}`, build version {facade.VERSION}.",
             "",

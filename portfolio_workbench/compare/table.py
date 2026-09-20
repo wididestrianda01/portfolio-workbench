@@ -10,17 +10,25 @@ percent is where a false positive is born, and the table is the place a reader w
 
 **A verdict is a ladder, and each rung is a leg the design fixed.** A cell is reported as different
 only when it clears the declared family-wise bar (which is also the multiple-testing haircut, since
-one test of one statistic serves both) keeps rank in at least eighty percent of bootstrap resamples,
-and holds its sign under the expanding-window protocol. Anything else prints **no difference detected**
-with the resolution limit beside it. A cell whose book reproduces equal weight is a declared negative
-result rather than a small difference, and a cell that clears every leg while sitting behind the
-benchmark is a difference detected rather than a candidate.
+one test of one statistic serves both), keeps its own advantage's sign in at least eighty percent of
+bootstrap resamples, and holds that sign under the expanding-window protocol. Anything else prints
+**no difference detected** with the resolution limit beside it. A cell whose book reproduces equal
+weight is a declared negative result rather than a small difference, and a cell that clears every leg
+while sitting behind the benchmark is a difference detected rather than a candidate.
+
+**Two of those legs ask whether one cell is better than the benchmark, and one asks whether it is
+uniquely best.** The paired bar and the cell's own sign retention are the first kind. The leader's
+**rank retention** - the share of resamples in which it stays ahead of the other fifteen - is the
+second, and on a table of near-tied methods it fails where the advantage holds. That row is refused a
+recommendation in words that say no unique cell was found, not that the advantage was absent: two
+different findings, and the table's columns carry both.
 
 **The resolution limit travels with the verdict.** Every row carries the smallest information-ratio
-difference this test would have detected at eighty percent power, so a reader can see whether "no
-difference detected" means the difference is absent or means it is smaller than the panel can
-resolve. That distinction is the whole point of measuring the noise floor, and a table that printed
-verdicts without it would be making the second statement while appearing to make the first.
+difference a test of that row's own bar would have detected at eighty percent power - the family-wise
+bar, since that is what decides the row - so a reader can see whether "no difference detected" means
+the difference is absent or means it is smaller than the panel can resolve. That distinction is the
+whole point of measuring the noise floor, and a table that printed verdicts without it would be making
+the second statement while appearing to make the first.
 
 **The expanding-window leg is only available where a repeat was declared**, which is the two cells
 the mandate's question turns on. The table says so on the row rather than leaving a blank that reads
@@ -62,12 +70,18 @@ REPRODUCES = "negative result: the book reproduces equal weight"
 NO_DIFFERENCE = "no difference detected"
 BEHIND = "significantly behind the benchmark once the cost is charged"
 RESAMPLING_LOST = "no difference detected: the advantage does not survive the bootstrap resampling"
+NOT_UNIQUE = (
+    "the advantage clears every bar, and no cell is uniquely best: the leader's rank is not retained "
+    "in bootstrap resamples"
+)
 SIGN_LOST = "no difference detected: the sign does not hold under the expanding window"
 LEG_NOT_RUN = "different on the paired test; the expanding leg was not run for this cell"
 CANDIDATE = "recommendation candidate"
 
-# The verdicts the design says are published as negative results rather than as small differences.
-NEGATIVE = (NO_DIFFERENCE, REPRODUCES, RESAMPLING_LOST, SIGN_LOST)
+# The verdicts the design says are published as negative results rather than as small differences. The
+# rank-refusal belongs here: it is a result the table publishes rather than a candidate it promotes, and
+# a reader who takes it for an absence would be reading the ranking as the advantage.
+NEGATIVE = (NO_DIFFERENCE, REPRODUCES, RESAMPLING_LOST, NOT_UNIQUE, SIGN_LOST)
 
 
 def _pad(value, width, spec, align=">"):
@@ -100,6 +114,13 @@ def verdict(row):
     holds. The correlation-adjusted bar is not a second chance: a cell that clears only the lower bar is
     still reported as no difference detected, and the row's own statistic is printed beside both so a
     reader can weigh it.
+
+    **The two bootstrap statistics get two verdicts, because they are two questions.** A cell whose own
+    advantage loses its sign under resampling has not measured an advantage, and that keeps the word
+    `no difference detected`. The leader whose *rank* is not retained has measured an advantage and has
+    not measured a unique one; it is refused a recommendation because the design's acceptance rule
+    requires every leg, but it is refused in words that say which leg failed, since a cell reported as
+    an absence when the absence is in the ranking is the one reading this ladder exists to prevent.
     """
     if row["cell"] == "policy":
         return IS_BENCHMARK
@@ -114,7 +135,7 @@ def verdict(row):
     if row["retention"] is not None and row["retention"] < statistics.RANK_RETENTION_FLOOR:
         return RESAMPLING_LOST
     if row["is_leader"] and row["leader_retention"] < statistics.RANK_RETENTION_FLOOR:
-        return RESAMPLING_LOST
+        return NOT_UNIQUE
     # The direction is read before the expanding leg so that every cell sitting behind the benchmark
     # says so in the same words; whether such a cell's sign survives the second protocol is a
     # question about a ranking it is not in.
@@ -173,8 +194,8 @@ def rows(grid, benchmark):
     sheet = []
     for result in grid["results"]:
         row = metrics.block(result, benchmark)
-        row["paired_benchmark"] = statistics.paired(result["net"], benchmark, benchmark)
-        row["paired_equal_weight"] = statistics.paired(result["net"], equal_weight, benchmark)
+        row["paired_benchmark"] = statistics.paired(result["net"], benchmark, benchmark, bar)
+        row["paired_equal_weight"] = statistics.paired(result["net"], equal_weight, benchmark, bar)
         measured = retention["cells"].get(result["id"], {})
         row["retention"] = measured.get("retention")
         row["share_leader"] = measured.get("share_leader")

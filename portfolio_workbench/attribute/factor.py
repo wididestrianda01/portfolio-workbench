@@ -277,6 +277,9 @@ def fund_example(series, factors, bar):
     fit = exposures.regress(y, frame)
     alpha, t_alpha = float(fit["alpha"][0]), float(fit["t_alpha"][0])
     standard_error = abs(alpha / t_alpha) if t_alpha else float("nan")
+    # The nominal two-sided bar rather than the family-wise one: an alpha here is one regression's own
+    # coefficient, not one of the sixteen comparisons the table corrects, so its detectable difference is
+    # built on the level the test it belongs to decides at. `statistics.detection` builds the other one.
     detectable = statistics.POWER * standard_error
     return {
         "months": len(months),

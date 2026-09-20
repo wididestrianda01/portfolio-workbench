@@ -468,14 +468,21 @@ def planted_pair(periods=131, rho=0.95, seed=11):
     return pd.Series(one, index=index), pd.Series(two, index=index), flat
 
 
-def test_the_paired_test_reproduces_the_power_calculations_own_resolution():
+def test_the_paired_test_quotes_its_resolution_at_the_bar_it_decides_at():
     """The design's numbers, re-derived from the paired statistic: the standard error of the annualised
     information-ratio difference is `sqrt(12/T) * sqrt(2(1-rho))` on the realised correlation, which is
     0.098 at a correlation of 0.95 over 131 months, and the smallest difference this test detects at
-    eighty percent power is 0.27 - the figure the reporting rule prints beside every verdict that finds
-    no difference."""
+    eighty percent power is that standard error times the bar the row decided at plus the power
+    quantile.
+
+    The bar is the family-wise 2.9552 here, so the resolution is 0.36; the nominal two-sided 1.96 would
+    give 0.27, and the assertion below is that the second is the finer of the two. A row whose verdict
+    was printed by the family-wise bar may not quote the resolution of a test that decides at the
+    nominal one, because the resolution's whole job is to qualify that verdict.
+    """
     one, two, flat = planted_pair()
-    result = statistics.paired(two, one, flat)
+    bar = statistics.family_wise_bar(16)
+    result = statistics.paired(two, one, flat, bar)
     realised = float(np.corrcoef(two, one)[0, 1])
 
     assert result["correlation"] == pytest.approx(realised, abs=1e-12)
@@ -485,10 +492,13 @@ def test_the_paired_test_reproduces_the_power_calculations_own_resolution():
     )
     assert result["standard_error"] == pytest.approx(0.098, rel=0.10)
     assert result["statistic"] == pytest.approx(result["difference"] / result["standard_error"], abs=1e-12)
-    assert result["resolution"] == pytest.approx(statistics.POWER * result["standard_error"], abs=1e-12)
-    assert result["resolution"] == pytest.approx(0.27, rel=0.10)
+    assert result["bar"] == pytest.approx(bar, abs=1e-12)
+    assert result["resolution"] == pytest.approx(statistics.detection(bar) * result["standard_error"], abs=1e-12)
+    assert result["resolution"] == pytest.approx(0.36, rel=0.10)
+    assert statistics.detection(bar) == pytest.approx(bar + statistics.POWER_QUANTILE, abs=1e-12)
+    assert statistics.detection(bar) > statistics.POWER, "the deciding bar is the conservative one"
 
-    identical = statistics.paired(one, one.copy(), flat)
+    identical = statistics.paired(one, one.copy(), flat, bar)
     assert identical["degenerate"] is True and identical["statistic"] == 0.0
     assert statistics.sign_holds(-0.4, -0.7) is True and statistics.sign_holds(-0.4, 0.7) is False
 

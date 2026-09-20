@@ -8,11 +8,18 @@ because the cells are highly correlated: same universe, same months, long-only b
 agree. The realised correlation is therefore measured and reported rather than assumed, because the
 resolution quoted beside every verdict is a function of it.
 
-**The resolution is quoted in the metric's own units.** The paired standard error of the annualised
-information-ratio difference is `sqrt(12/T) * sqrt(2 * (1 - rho))` under the null, which is 0.098 at a
-correlation of 0.95 and 131 months, the figure the design's own power calculation arrived at. The
-smallest difference that clears the bar at eighty percent power is `2.8016 * that`, or 0.27, which is
-why a cell reported as **no difference detected** prints 0.27 beside it rather than nothing.
+**The resolution is quoted in the metric's own units, at the bar the row was decided at.** The paired
+standard error of the annualised information-ratio difference is `sqrt(12/T) * sqrt(2 * (1 - rho))`
+under the null, which is 0.098 at a correlation of 0.95 and 131 months, the figure the design's own
+power calculation arrived at. The smallest difference a test detects at eighty percent power is that
+test's **own** critical value plus the power quantile times the standard error, and a comparison row
+decides at the family-wise bar of 2.9552, so the multiplier is 3.7968 and the resolution 0.36 here. The
+nominal two-sided five percent would give 2.8016 and 0.27, and printing that beside a verdict the
+family-wise bar produced describes a different test from the one that decided the row: it would claim a
+finer resolution than the test has, which is the direction that flatters every "no difference detected"
+and the one the noise floor exists to guard. Two multipliers coexist for that reason - the
+detectable-alpha example in the attribution layer decides at the nominal two-sided level and keeps the
+nominal one - and `detection` builds either from the bar it belongs to.
 
 **The bar is the family-wise one, and the correlation-adjusted bar is printed beside it.** Across
 sixteen cells the declared bar on the null statistic is the Bonferroni-equivalent
@@ -21,19 +28,23 @@ sixteen cells the declared bar on the null statistic is the Bonferroni-equivalen
 afterwards rather than being the hypothesis. The same number is the 95th percentile of the maximum of
 sixteen independent absolute standard normals to within a quarter of a percent (2.9478 measured against
 2.9552), and Bonferroni is the conservative one of the two. The one-sided quantile over the same cells
-is 2.7344 (the value this module shipped before the two readings were separated, and a bar that would
-have held the family to 9.5% rather than to the 5% it is declared at.
-The cells are positively correlated, so the effective number of tests is smaller and the honest bar
-would be lower; both numbers are printed, and the conservative one decides. The haircut is
-**self-imposed from the literature** - it sits in the same territory as the threshold that reading
-arrived at once search is accounted for) and nothing regulatory requires it. Saying so is the point:
-a self-imposed bar presented as a requirement would borrow an authority it does not have.
+is 2.7344, the value this module shipped before the two readings were separated, and a bar that would
+have held the family to 9.5% rather than to the 5% it is declared at. The cells are positively
+correlated, so the effective number of tests is smaller and the honest bar would be lower; both numbers
+are printed, and the conservative one decides. The haircut is **self-imposed from the literature** - it
+sits in the same territory as the threshold that reading arrived at once search is accounted for - and
+nothing regulatory requires it. Saying so is the point: a self-imposed bar presented as a requirement
+would borrow an authority it does not have.
 
-**A difference is reported only when all three legs pass.** The paired bar, a leader that keeps its
-rank in at least eighty percent of bootstrap resamples, and a sign that survives the expanding-window
-protocol. Anything failing a leg is published as **no difference detected**, with the resolution limit
-beside it, which the design expects to be the verdict for several prominent methods, and which is a
-finding rather than a failure.
+**A difference is reported only when every leg of the row's own claim passes, and the legs answer two
+different questions.** The paired bar and the cell's own share of resamples in which its advantage keeps
+its sign are statements about the cell against the benchmark; the expanding-window sign is a statement
+about the protocol; and the leader's **rank retention** is a statement about the cells against each
+other, that is, whether one of them is *uniquely* best. A cell failing a leg of its own claim is
+published as **no difference detected**, with the resolution limit beside it. A leader that clears every
+leg about its own advantage and fails the rank-retention rung is published as a refusal to choose
+*between* cells rather than as an absence of an advantage, because those are two different findings and
+only one of them is measured here.
 """
 
 import math
@@ -47,9 +58,15 @@ from . import metrics
 
 # The level the family-wise bar is declared at, stated once.
 ALPHA = 0.05
-# The two-sided 5% critical value plus the eighty-percent power quantile: the multiplier that turns a
-# standard error into the smallest difference a test of this size would detect at that power.
-POWER = float(norm.ppf(1.0 - ALPHA / 2.0) + norm.ppf(0.80))
+# The power the design's resolution is quoted at, and its quantile on its own: a resolution is built on
+# the bar its own test decides at, and the two tests in this package that quote one decide at different
+# bars. Keeping the quantile separate is what lets both be built rather than one being reused.
+POWER_LEVEL = 0.80
+POWER_QUANTILE = float(norm.ppf(POWER_LEVEL))
+# The two-sided 5% critical value plus the power quantile: the multiplier for a test that decides at the
+# **nominal** level, which is the detectable-alpha example in the attribution layer. A comparison row
+# decides at the family-wise bar and calls `detection` with that bar instead.
+POWER = float(norm.ppf(1.0 - ALPHA / 2.0) + POWER_QUANTILE)
 # The resample count and the retention floor the design fixed before any cell ran.
 BOOTSTRAP_DRAWS = 2000
 RANK_RETENTION_FLOOR = 0.80
@@ -115,7 +132,20 @@ def adjusted_bar(correlation, alpha=ALPHA):
     return family_wise_bar(max(int(round(effective_tests(correlation))), 1), alpha=alpha)
 
 
-def paired(reference, alternative, benchmark, periods=metrics.PERIODS_PER_YEAR):
+def detection(bar, power=POWER_LEVEL):
+    """The multiplier that turns a standard error into the smallest difference a test would detect.
+
+    `bar` is the critical value the test's **own** decision is made at, and the answer is that bar plus
+    the power quantile: a difference at the bar is detected with fifty percent probability, so eighty
+    percent power costs the extra quantile. Building the number from the bar rather than from a constant
+    is what keeps a row's resolution and its verdict statements about the same test - the comparison
+    rows decide at the family-wise bar, the detectable-alpha example at the nominal two-sided one, and
+    a resolution quoted at the other bar would describe a test that did not print the verdict beside it.
+    """
+    return float(bar + norm.ppf(power))
+
+
+def paired(reference, alternative, benchmark, bar, periods=metrics.PERIODS_PER_YEAR):
     """One paired comparison: the difference of two annualised information ratios, the standard error
     the realised correlation gives it, and the resolution that follows.
 
@@ -125,6 +155,10 @@ def paired(reference, alternative, benchmark, periods=metrics.PERIODS_PER_YEAR):
     Two series that are perfectly correlated leave no variance for the standard error, and the answer
     is then decided by whether the two books are the same book: the difference of their ratios is
     reported as zero when they are, and as unbounded when a perfectly correlated pair still differs.
+
+    `bar` is required rather than defaulted, because the resolution this returns is a statement about
+    the test that decides with it: a caller that does not know its own bar does not know what resolution
+    it is reporting, and the default would silently be the nominal one for a row decided family-wise.
     """
     left = pd.Series(reference, dtype=float)
     right = pd.Series(alternative, dtype=float).reindex(left.index)
@@ -152,10 +186,11 @@ def paired(reference, alternative, benchmark, periods=metrics.PERIODS_PER_YEAR):
         "standard_error": error,
         "statistic": statistic,
         # The smallest difference this test would have detected at eighty percent power, printed
-        # beside any verdict that reports no difference. The statistic is reported in the units the
-        # bar is declared in rather than as a p-value: the bar is a z, and a second scale for the
-        # same number is a place for the two to disagree.
-        "resolution": float(POWER * error),
+        # beside any verdict that reports no difference, and built from the bar this test decides at.
+        # The statistic is reported in the units the bar is declared in rather than as a p-value: the
+        # bar is a z, and a second scale for the same number is a place for the two to disagree.
+        "bar": float(bar),
+        "resolution": float(detection(bar) * error),
         "degenerate": bool(error <= RERUN_TOLERANCE),
     }
 
@@ -167,12 +202,15 @@ def rank_retention(frame, benchmark, draws=BOOTSTRAP_DRAWS, seed=SEED):
     One resampled month index is drawn per resample and shared by every cell, so the correlation
     between cells survives the resampling: drawing each cell's months independently would break the
     very structure that makes the comparison paired and would report a leader stability nobody
-    measured. Two statistics come out of it. The design's headline is the **rank retention** of the
-    leader - the share of resamples in which the cell that led the full sample leads the resample. The
-    per-cell statistic is the share of resamples in which that cell's information ratio **keeps the
-    sign** of its full-sample one, which is the same question asked of the claim the cell's own row
-    makes: a row is a statement about one cell against the benchmark, and an advantage that flips sign
-    when the months are resampled has not been measured.
+    measured. Two statistics come out of it, and they answer different questions. The design's headline
+    is the **rank retention** of the leader - the share of resamples in which the cell that led the full
+    sample leads the resample - which is a statement about the *cells against each other*, that is,
+    whether one of them is uniquely best. The per-cell statistic is the share of resamples in which that
+    cell's information ratio **keeps the sign** of its full-sample one, which is the same question asked
+    of the claim the cell's own row makes: a row is a statement about one cell against the benchmark, and
+    an advantage that flips sign when the months are resampled has not been measured. A leader can fail
+    the first while passing the second, and on a table of near-tied methods it usually does; reading the
+    first as a failure of the advantage is reading a ranking as an absence.
     """
     active = pd.DataFrame(frame, dtype=float).sub(pd.Series(benchmark, dtype=float), axis=0)
     values = active.to_numpy()

@@ -2,11 +2,11 @@
 
 A learning exercise performed in role: a simulated mandate with no client and no institution. Nothing in this document is investment advice, a recommendation to any person, or a client communication, and the register is deliberate.
 
-**Snapshot** `2026-09-13`, **build version** `1.1`, written from
+**Snapshot** `2026-09-13`, **build version** `1.2`, written from
 20 pre-registered runs over 16 distinct cells, of which
 131 out-of-sample months (2015-09 to 2026-07) are traded.
 
-**Length** 6,762 words of prose, plus 3,900 words of printed comparison tables. The
+**Length** 7,160 words of prose, plus 3,918 words of printed comparison tables. The
 design's band for the prose is 6,000 to 9,000 words, and the length is reported rather than asserted: a
 drift past the band is visible in the run instead of enforced by a command.
 
@@ -342,9 +342,11 @@ separate two methods: nearly every method sits inside every other's interval. **
 therefore a paired test on the difference of the two monthly return series**, which is legitimate only
 because the cells are highly correlated with one another, sharing a universe, a set of months and
 long-only books. The paired standard error at the realised correlation is much smaller, and the
-smallest difference the design detects at 80% power is of the order of 0.27 in information-ratio terms.
-That number is what gets printed beside every verdict of "no difference detected", and it is the
-difference between a finding and an absence of one.
+smallest difference the design detects at 80% power is of the order of 0.36 in information-ratio terms:
+that is the bar the row decided at plus the power quantile times the standard error, and it is what gets
+printed beside every verdict of "no difference detected". It is the difference between a finding and an
+absence of one, and it is quoted at the bar that decided the row rather than at the nominal five percent,
+which would print a figure a third smaller and describe a test the row was not decided by.
 
 The engine walks forward. Each cell is estimated on a rolling 60 months, refitted
 monthly, and trades only inside the window: an estimate formed at the close of a month never reads the
@@ -358,11 +360,17 @@ constraint-binding frequency are reported beside them. The information ratio is 
 mandate is benchmarked and because an active decision is judged on the risk it takes away from the
 benchmark, not on its own volatility. The Sharpe ratio is what was measured, then set aside.
 
-**Four verdicts, one ladder.** A cell is called different only when it clears the family-wise bar at
-`|z| >= 2.9552`, keeps its rank in at least 80% of
-2000 bootstrap resamples of its monthly returns, and holds its sign under the
-expanding protocol. Failing any rung produces one of: no difference detected, a declared negative result
-where the book reproduces equal weight, or a statement that the expanding leg was not run for that cell.
+**Four verdicts, one ladder, and two of its rungs ask different questions.** A cell is called different
+only when it clears the family-wise bar at
+`|z| >= 2.9552`, keeps the sign of its own advantage in at least
+80% of 2000 bootstrap resamples of its monthly
+returns, and holds that sign under the expanding protocol. Failing any rung produces one of: no difference
+detected, a declared negative result where the book reproduces equal weight, or a statement that the
+expanding leg was not run for that cell. The resampling contributes two statistics and they are not
+interchangeable: a cell's own sign retention asks whether its advantage over the benchmark is measured,
+and the leader's **rank retention** asks whether one cell is uniquely best among the cells. A leader that
+passes the first and fails the second is refused a recommendation, because the design requires every rung,
+and its row is worded as a ranking that was not resolved rather than as an advantage that was not found.
 Sixteen cells tested against two families imply a bar well past the nominal five percent, and that is the
 point: testing this many methods against one universe and reporting the winner is how research finds
 differences that do not exist. The bar used is
@@ -440,32 +448,32 @@ that is the point of generating this document.
 
 | cell | st | IR | vol/yr | TE/yr | z vs pol | res | ret | expand | verdict |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| equal_weight | A | -0.573 | 6.59% | 1.71% | -8.86 | 0.18 | 98% | - | the equal-weight bar itself |
+| equal_weight | A | -0.573 | 6.59% | 1.71% | -8.86 | 0.25 | 98% | - | the equal-weight bar itself |
 | policy | A | 0.000 | 7.43% | 0.00% | 0.00 | 0.00 | 0% | - | the policy benchmark itself |
-| mean_variance_shrunk | A | 0.544 | 10.41% | 4.91% | 4.05 | 0.38 | 96% | yes | no difference detected: the advantage does not survive the bootstrap resampling |
-| minimum_variance | A | -0.764 | 1.60% | 6.23% | -3.97 | 0.54 | 99% | yes | significantly behind the benchmark once the cost is charged |
-| maximum_diversification | A | -0.556 | 2.49% | 5.64% | -2.90 | 0.54 | 96% | - | no difference detected |
-| erc_unbounded | A | -0.747 | 0.39% | 7.14% | -3.42 | 0.61 | 99% | - | significantly behind the benchmark once the cost is charged |
-| erc_bounded | A | -0.728 | 2.17% | 5.48% | -6.30 | 0.32 | 99% | - | significantly behind the benchmark once the cost is charged |
-| hierarchical_risk_parity | A | -0.722 | 3.61% | 4.16% | -7.51 | 0.27 | 99% | - | significantly behind the benchmark once the cost is charged |
-| mean_cvar | A | -0.659 | 2.02% | 6.28% | -2.64 | 0.70 | 98% | - | no difference detected |
-| minimum_variance_shrinkage | B | -0.737 | 1.78% | 6.03% | -4.21 | 0.49 | 99% | - | significantly behind the benchmark once the cost is charged |
-| minimum_variance_factor | B | -0.791 | 1.63% | 6.15% | -4.43 | 0.50 | 99% | - | significantly behind the benchmark once the cost is charged |
-| erc_shrinkage | B | -0.709 | 3.39% | 4.40% | -6.78 | 0.29 | 99% | - | significantly behind the benchmark once the cost is charged |
-| erc_factor | B | -0.734 | 2.18% | 5.47% | -6.40 | 0.32 | 99% | - | significantly behind the benchmark once the cost is charged |
-| mean_variance_sample | C | 0.517 | 10.57% | 4.98% | 3.91 | 0.37 | 95% | - | different on the paired test; the expanding leg was not run for this cell |
-| mean_variance_black_litterman | C | 0.392 | 11.70% | 5.57% | 3.37 | 0.33 | 90% | - | different on the paired test; the expanding leg was not run for this cell |
-| mean_variance_none | C | -0.573 | 6.59% | 1.71% | -8.86 | 0.18 | 98% | - | negative result: the book reproduces equal weight |
-| minimum_variance_uncapped | A | -0.746 | 0.18% | 7.39% | -1.96 | 1.07 | -- | - | no difference detected |
-| maximum_diversification_uncapped | A | -0.736 | 0.29% | 7.27% | -2.62 | 0.79 | -- | - | no difference detected |
-| mean_variance_shrunk_expanding | A | 0.506 | 12.66% | 6.32% | 4.58 | 0.31 | -- | - | the expanding repeat of the rolling cell |
-| minimum_variance_expanding | A | -0.818 | 1.55% | 6.20% | -4.66 | 0.49 | -- | - | the expanding repeat of the rolling cell |
+| mean_variance_shrunk | A | 0.544 | 10.41% | 4.91% | 4.05 | 0.51 | 96% | yes | the advantage clears every bar, and no cell is uniquely best: the leader's rank is not retained in bootstrap resamples |
+| minimum_variance | A | -0.764 | 1.60% | 6.23% | -3.97 | 0.73 | 99% | yes | significantly behind the benchmark once the cost is charged |
+| maximum_diversification | A | -0.556 | 2.49% | 5.64% | -2.90 | 0.73 | 96% | - | no difference detected |
+| erc_unbounded | A | -0.747 | 0.39% | 7.14% | -3.42 | 0.83 | 99% | - | significantly behind the benchmark once the cost is charged |
+| erc_bounded | A | -0.728 | 2.17% | 5.48% | -6.30 | 0.44 | 99% | - | significantly behind the benchmark once the cost is charged |
+| hierarchical_risk_parity | A | -0.722 | 3.61% | 4.16% | -7.51 | 0.37 | 99% | - | significantly behind the benchmark once the cost is charged |
+| mean_cvar | A | -0.659 | 2.02% | 6.28% | -2.64 | 0.95 | 98% | - | no difference detected |
+| minimum_variance_shrinkage | B | -0.737 | 1.78% | 6.03% | -4.21 | 0.66 | 99% | - | significantly behind the benchmark once the cost is charged |
+| minimum_variance_factor | B | -0.791 | 1.63% | 6.15% | -4.43 | 0.68 | 99% | - | significantly behind the benchmark once the cost is charged |
+| erc_shrinkage | B | -0.709 | 3.39% | 4.40% | -6.78 | 0.40 | 99% | - | significantly behind the benchmark once the cost is charged |
+| erc_factor | B | -0.734 | 2.18% | 5.47% | -6.40 | 0.44 | 99% | - | significantly behind the benchmark once the cost is charged |
+| mean_variance_sample | C | 0.517 | 10.57% | 4.98% | 3.91 | 0.50 | 95% | - | different on the paired test; the expanding leg was not run for this cell |
+| mean_variance_black_litterman | C | 0.392 | 11.70% | 5.57% | 3.37 | 0.44 | 90% | - | different on the paired test; the expanding leg was not run for this cell |
+| mean_variance_none | C | -0.573 | 6.59% | 1.71% | -8.86 | 0.25 | 98% | - | negative result: the book reproduces equal weight |
+| minimum_variance_uncapped | A | -0.746 | 0.18% | 7.39% | -1.96 | 1.45 | -- | - | no difference detected |
+| maximum_diversification_uncapped | A | -0.736 | 0.29% | 7.27% | -2.62 | 1.07 | -- | - | no difference detected |
+| mean_variance_shrunk_expanding | A | 0.506 | 12.66% | 6.32% | 4.58 | 0.42 | -- | - | the expanding repeat of the rolling cell |
+| minimum_variance_expanding | A | -0.818 | 1.55% | 6.20% | -4.66 | 0.67 | -- | - | the expanding repeat of the rolling cell |
 
 **the cells published as negative results, each also carrying its verdict above**
 
 | cell | verdict |
 | :--- | ---: |
-| mean_variance_shrunk | no difference detected: the advantage does not survive the bootstrap resampling |
+| mean_variance_shrunk | the advantage clears every bar, and no cell is uniquely best: the leader's rank is not retained in bootstrap resamples |
 | maximum_diversification | no difference detected |
 | mean_cvar | no difference detected |
 | mean_variance_none | negative result: the book reproduces equal weight |
@@ -611,19 +619,21 @@ metric the question turns on is therefore tracking error rather than return: wha
 families is how much risk they take away from the benchmark, and a family that takes more away is not
 thereby better.
 
-**The direction is not the one a ranking would suggest.** 8 cells that differ from the policy
-benchmark on the paired test sit significantly *behind* it once cost is charged. That is a statement
-about cost and about the benchmark, not about the methods being poor: the policy book is a reasonable
-diversified book, and the bar it sets is a real one.
+**The direction cuts both ways.** 8 cells that differ from the policy benchmark on the paired
+test sit significantly *behind* it once cost is charged, and the cells that sit significantly *ahead* of it
+are the ones carrying a mean input. The first is a statement about cost and about the benchmark rather
+than about the methods being poor: the policy book is a reasonable diversified book, and the bar it sets
+is a real one.
 
-**The sample's leader does not survive resampling.** The best information ratio on the full sample is
-`mean_variance_shrunk` at +0.544, and it keeps its rank in only
-67.5% of 2000 resamples against a floor of
-80% declared in advance. Its target path moves
-6.91% a month, which is among the largest movements in the table. An
-advantage that does not survive resampling and a weight path that moves when the estimation window shifts
-by one month are the two signatures of a method exploiting estimation error, and both are present. This
-is a result, not a failure of the exercise: it is what the evaluation was built to detect.
+**The sample's leader has an advantage the resampling keeps and a rank it does not.** The best
+information ratio on the full sample is `mean_variance_shrunk` at +0.544. It keeps the
+sign of that advantage in 95.9% of 2000 resamples, above the
+80% floor declared in advance, and holds it under the expanding
+protocol; it keeps its **rank** ahead of the other cells in 67.5% of the
+same resamples, below that floor. Its target path moves 6.91% a month,
+which is among the largest movements in the table and is the honest signature of a method leaning on its
+estimates. These are two different findings. The advantage is measured and the ordering of the near-tied
+cells is not, and a reader who takes the second for the first has read a ranking as an absence.
 
 **The risk budget is consumed by accident rather than by design.** The realised group contributions are
 reported against the declared vector for the policy book and the leader, and the largest departure on the
@@ -646,44 +656,59 @@ reconciles to 2e-14 relative, the Euler contributions add to 4e-16 relative
 on every run, and the factor model's unexplained part is reported as its own measured quantity. Nothing
 in the table is a forecast, and no cell's row supports a claim about a live book.
 
-**Three separate statements are easy to confuse, and the documents keep them apart.** A cell can differ
-from the benchmark, a cell can be the sample's leader, and a cell can be worth adopting. The first is a
-test result, the second is a rank, and the third requires the first to survive every rung of the ladder
-and the cost of the change to be worth paying. On this panel nothing reaches the third, which is why the
-decision record recommends changing nothing rather than nominating the leader.
+**Four separate statements are easy to confuse, and the documents keep them apart.** A cell can differ
+from the benchmark, a family of cells can differ from it, a cell can be the sample's leader, and a cell
+can be worth adopting. The first two are test results, the third is a rank, and the fourth requires the
+first to survive every rung of the ladder and the cost of the change to be worth paying. On this panel
+nothing reaches the fourth, so the record nominates no cell; the second is what its recommendation rests
+on, and the gap between the second and the fourth is the reason the ladder and the axis are reported side
+by side.
 
 ## 7. The conclusion, in the committee's terms
 
-**The recommendation is to retain the policy benchmark and change nothing.** No cell cleared every rung
-of the declared ladder. The leader cleared the family-wise bar and failed the rank-retention rung, so its
-advantage is the ranking of this sample rather than a property of the method, and a committee that
-adopted it would be paying trading cost to buy estimation error. The negative result is the finding, and
-publishing it is the point of having built the evaluation this way rather than reaching for a winner.
+**Move the objective to a mean-input mean-variance construction, and do not claim a variant.** No cell
+cleared every rung of the declared ladder: the leader cleared the family-wise bar, kept the sign of its own
+advantage in 95.9% of resamples and held it under the expanding protocol, and failed the rung that asks
+whether one cell is uniquely best (67.5% against the
+80% floor). The ladder names no cell, and the record does not either.
+What the same table supports is the axis those cells share: all 3 of the cells carrying a
+mean input clear the family-wise bar on their own row, keeping the sign of the advantage in 96%, 95%, 90% of
+resamples, while the cell that carries no mean clears nothing and returns
+-0.573. The construction is recommended and the variant
+is not, because the leading two sit 0.027 apart on the information ratio against a resolution of
+0.51 on the leading row.
 
-The practical value runs in three directions. For the mandate, the cost of the decision is nil: the book
-is already held, its turnover is zero, and the alternative was to pay a construction cost to move to a
-book whose advantage the data does not support. For the method, the exercise quantifies how much of a
-methodological choice survives when cost, multiple testing and resampling are charged against it, which
-is a far more useful quantity than a ranking of in-sample fits. For the reader, the artifacts are a
+The practical value runs in three directions. For the mandate, the decision is a partial tilt rather than a
+replacement: the family trades 41.3% to 45.1% a year and costs 0.08% to 0.09% of return a year, which its advantage
+survives, and the tilt is sized so that the mandate's volatility and its declared risk budget stay where
+the mandate put them. For the method, the exercise quantifies how much of a methodological choice survives
+when cost, multiple testing and resampling are charged against it, and it keeps apart the two questions
+resampling can answer - whether an advantage is measured, and whether a ranking is - which is a more
+useful quantity than a ranking of in-sample fits. For the reader, the artifacts are a
 worked example of the whole chain, from a licensed data source through a look-ahead-free panel, a
 documented risk model, constrained construction, a paired out-of-sample evaluation and two
 decompositions, with every number traceable to the module that computed it.
 
-**Five conditions would reopen the decision**, and they are stated in the record rather than implied. A
-rerun that no longer reproduces the metric table within the stated tolerance invalidates the exercise. A
-cell that clears the bar, keeps its rank in at least 80% of resamples
-and holds its sign under the expanding protocol becomes a candidate. A longer panel on which a difference
-absent here remains absent while the resolution limit falls below it would turn an absence into
-evidence. A revised cost multiple that removes the leader's advantage would remove the only support it
-had. And a change to the constraint set would make a family's result a result about the constraints,
-which the perturbation runs already exist to measure. The recommendation is withdrawn or revisited when
-one of those holds, and not before.
+**Six conditions would reopen the decision**, and they are stated in the record rather than implied. A
+rerun that no longer reproduces the metric table within the stated tolerance invalidates the exercise. The
+cells carrying a mean losing the bar or the sign of their advantage, on this snapshot or a longer panel,
+withdraws the recommendation, because it rests on those rows. The cap binding far enough to make the
+result one about the constraint set would do the same, which the perturbation runs already exist to
+measure. So would a decision to treat the declared risk budget as a constraint rather than a report and a
+mean-input book that cannot then be sized to the mandate's volatility. A cell that clears the bar, keeps
+the sign of its own advantage in at least 80% of resamples, holds that
+sign under the expanding protocol and keeps its rank in at least
+80% of the same resamples becomes a candidate, and the record would
+then name it rather than the axis. And a longer panel on which a difference absent here remains absent
+while the resolution limit falls below it would turn an absence into evidence, so the risk-based families
+would have to be reread. The recommendation is withdrawn or revisited when one of those holds, and not
+before.
 
 **The scope stays stated.** One panel, 11 sleeves, 191 months of
 which 131 are traded, one mandate and one currency. The exercise is a simulation performed in
 role, with no client and no institution, and nothing here is investment advice or a client communication.
 A reader who takes one of these numbers should take its resolution limit with it, and a reader who takes
-the recommendation should take the five conditions with it.
+the recommendation should take the six conditions with it.
 
 ## 8. The concepts, in one place
 
