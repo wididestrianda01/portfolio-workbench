@@ -244,8 +244,8 @@ def figure_retention(sheet, path):
     The argument: the sample's leader leads in only a little over two thirds of resamples, against a
     floor of eighty percent declared before any were drawn, and no other run comes close. The statistic
     is the per-cell counterpart of the leader's own rank retention, which is the same number for the
-    leader itself; the per-cell sign retention the cost block reports is a different question - whether
-    a cell's own advantage keeps its sign - and is deliberately not what this figure draws.
+    leader itself; the per-cell sign retention the cost block reports is a different question (whether a
+    cell's own advantage keeps its sign) and is deliberately not what this figure draws.
     """
     cells = sheet["retention"]["cells"]
     leader = sheet["retention"]["leader"]

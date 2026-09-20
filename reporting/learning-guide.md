@@ -6,7 +6,7 @@ A learning exercise performed in role: a simulated mandate with no client and no
 20 pre-registered runs over 16 distinct cells, of which
 131 out-of-sample months (2015-09 to 2026-07) are traded.
 
-**Length** 6,763 words of prose, plus 3,900 words of printed comparison tables. The
+**Length** 6,762 words of prose, plus 3,900 words of printed comparison tables. The
 design's band for the prose is 6,000 to 9,000 words, and the length is reported rather than asserted: a
 drift past the band is visible in the run instead of enforced by a command.
 
@@ -154,7 +154,7 @@ project's claims are properties of one link rather than of the whole.
 
 **Fetch, once, outside the package.** The retrieval script is deliberately not part of the build. It
 ran once, wrote the snapshot, and was retired, in the same way a reader fetching the data themselves
-would do it by hand. Keeping it out of the package states the dependency honestly: the build consumes a
+would do it by hand. Keeping it out of the package makes the dependency visible: the build consumes a
 frozen snapshot, and a build that could re-fetch would silently stop being reproducible on the day the
 feed changed.
 
@@ -207,7 +207,7 @@ that way, and what was rejected.
 ### 4.1 The factor layer: describing what moves the sleeves
 
 The eleven sleeves are funds, not firms, so the securities-level style and industry attributes a
-commercial risk model would use are simply not available on this panel. What is available is a set of
+commercial risk model would use are not available on this panel. What is available is a set of
 published index legs and the sleeves' own construction. The build therefore carries two factor sets and
 never confuses them.
 

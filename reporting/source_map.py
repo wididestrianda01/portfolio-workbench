@@ -346,7 +346,7 @@ OVERRIDES = {
         ),
         "returns_agreement": (
             "the check that the query's table and the pandas path's agree cell by cell, which is what "
-            "lets the statement stand as the contract's definition rather than as a paraphrase"
+            "lets the statement be the contract's definition rather than a paraphrase"
         ),
     },
     "data/quality.py": {

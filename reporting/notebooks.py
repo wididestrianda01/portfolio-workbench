@@ -179,9 +179,17 @@ def sources(drives):
 
 
 def notebook(record):
-    """One notebook, on the spine, from one record."""
+    """One notebook, on the spine, from one record.
+
+    Cell ids are assigned from the slug and the position rather than drawn at random, because a random
+    id makes every regeneration a sixteen-file diff for a one-line change. The id is the notebook's own
+    coordinate: stable across runs, unique inside the file, and the same id for the same cell of the
+    same record.
+    """
     record = dict(record, headers=headers(record["drives"]), sources=sources(record["drives"]))
     built = nbformat.v4.new_notebook(cells=_cells_for(record))
+    for position, cell in enumerate(built.cells):
+        cell["id"] = f"{record['slug']}-{position:02d}"
     built.metadata["kernelspec"] = {"name": "python3", "display_name": "Python 3", "language": "python"}
     return built
 
@@ -199,6 +207,10 @@ def build(records=None, root=None, execute=True, timeout=900):
                 built,
                 timeout=timeout,
                 kernel_name="python3",
+                # Timing metadata is not recorded: it is a fact about one machine's clock rather than
+                # about the run, and recording it makes a regeneration diff against itself. What the
+                # notebook is evidence for is that the cell ran and what it printed, both of which stay.
+                record_timing=False,
                 resources={"metadata": {"path": ROOT}},
             )
             client.execute()
