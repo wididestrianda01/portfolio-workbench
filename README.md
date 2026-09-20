@@ -10,57 +10,92 @@ mandate, and reporting which choices moved the outcome, on which metric, and at 
 Nothing in this repository is investment advice, a recommendation to any person, or a client
 communication.*
 
+---
+
 ## What this does
 
 A mandate is a set of weights, a universe and a benchmark, and construction is the act of choosing
-those weights. Practitioners choose between families that ask different questions of the same inputs:
-minimum variance asks which book has the smallest variance, equal risk contribution asks which makes
-every sleeve's contribution to volatility equal, maximum diversification asks which gets the most
-diversification out of the covariance, and mean-variance asks which trades expected return against
-variance at a stated risk aversion. Each family consumes a different set of inputs, and the literature
-is unusually united on one point: the mean is the input carrying the most estimation error.
+those weights. Practitioners choose between families that ask different questions of the same inputs.
+
+| Family | The question it asks |
+| --- | --- |
+| Minimum variance | Which book has the smallest variance? |
+| Equal risk contribution | Which makes every sleeve's contribution to volatility equal? |
+| Maximum diversification | Which gets the most diversification out of the covariance? |
+| Mean-variance | Which trades expected return against variance at a stated risk aversion? |
+| Mean-CVaR | Which minimises the average loss in the tail of its own window? |
+| Hierarchical risk parity | Which allocates by bisecting a clustered correlation matrix? |
+
+Each family consumes a different set of inputs, and the literature is unusually united on one point:
+the mean is the input carrying the most estimation error.
 
 The decision in front of a committee is narrower than a search for the best method. It can leave the
 book alone, in which case it trades nothing and pays nothing, or it can adopt a constructed book, in
 which case it pays the cost of getting there and of staying there. That is why the question here is not
 which method is best in general. It is which methodological choices move the outcome on this mandate,
-by how much, on which metric, and what the change costs.
+by how much, on which metric, and what the change costs. What comes out is a table of verdicts on
+sixteen cells, not a ranking, and the negative results are published beside the positive ones.
 
-What comes out is a comparison of sixteen cells on one universe, one mandate and one currency, and the
-comparison is designed so that a difference has to earn its way past a cost charge, a family-wise bar
-and two further rungs before it is reported as one. The deliverable is a table of verdicts rather than
-a ranking, and the negative results are published beside the positive ones. The register is deliberate:
-the exercise is performed in role, on public data, and the declaration above travels on every artifact
-the repository publishes.
+---
+
+## The exercise in one picture
+
+```mermaid
+flowchart TD
+    SRC[Three sources: ECB rate chain, Fama and French legs, price feed] --> MAN[One frozen snapshot with its manifest: hashes, row counts, vintages]
+    MAN --> LD[Loader: verify, parse, run the quality gate]
+    LD --> TB[Long table: one row per instrument-month, behind the as-of gate]
+    TB --> F[Factor layer: spine, constructed block, exposures, count]
+    F --> R[Risk layer: sample, shrinkage, factor covariance]
+    F --> B[Construction: four mean inputs, eight objectives, one constraint set]
+    R --> B
+    B --> E[Evaluation: rolling 60 months, monthly refit, paired test]
+    E --> D[Comparison table, attribution, risk budget]
+    D --> O[Workbook, notebooks, memo, decision record, guide, figures]
+```
+
+Every number in every output comes off that one path. Nothing downstream of the table re-reads a raw
+file, and nothing upstream of it estimates anything.
+
+---
 
 ## How the comparison is built
 
-Seven layers, each with the reason it is shaped the way it is. The learning guide
-(`reporting/learning-guide.md`) walks through all of them with their citations and the alternatives
-they displaced; this section is the map.
+| Layer | What it decides | Module | Entry point |
+| --- | --- | --- | --- |
+| Data | The panel, its coverage, and what a moment is allowed to see | `data/` | `python3 -m portfolio_workbench.data.coverage` |
+| Factors | The exposure of each sleeve to the named spine and the constructed block | `factors/` | `.factors.spine`, `.factors.exposures`, `.factors.components`, `.factors.spanning` |
+| Risk | The covariance each constructor is handed | `risk/` | `python3 -m portfolio_workbench.risk.covariance` |
+| Construction | The weight vector, given a mean and a covariance | `construct/` | via `.compare.grid` |
+| Evaluation | Whether a difference between two books is claimable | `evaluate/` | `python3 -m portfolio_workbench.evaluate.walkforward` |
+| Comparison | Every cell's verdict, and the table it is read from | `compare/` | `python3 -m portfolio_workbench.compare.grid` |
+| Attribution | Where the active return came from, on holdings and on factors | `attribute/` | `.attribute.brinson`, `.attribute.factor` |
+| Risk budget | Where the realised volatility actually went | `budget/` | `python3 -m portfolio_workbench.budget.euler` |
+| Assembly | One snapshot, one run, one object every reading is taken off | `study.py` | `python3 -m portfolio_workbench.study` |
+| Boundary | The contract and five entry points a consumer adopts | `facade.py` | `python3 -m portfolio_workbench.facade` |
 
 **The data contract.** Three sources feed one frozen snapshot: the European Central Bank's Data Portal
 for the overnight rate chain, spliced from EONIA to the euro short-term rate at the transition with the
-overlap measured rather than assumed; the Fama/French archives for the developed-market factor legs;
-and a public price feed for the fund bars, read with the feed's adjusted close as the total-return
-proxy. The snapshot carries a manifest of instruments, file hashes, row counts and factor vintages, and
-the loader verifies all of it on every read and fails closed when it does not match. The rule doing the
-most work is the as-of rule: a month's bar becomes readable on the first day of the following month,
-and every join is gated by it. Without that gate an estimation window built at the end of March reads
-March's own return, which is look-ahead bias of one month, and a performance table would not reveal it.
+overlap measured rather than assumed; the Fama/French archives for the developed-market factor legs; and
+a public price feed for the fund bars, read with the feed's adjusted close as the total-return proxy.
+The snapshot carries a manifest of instruments, file hashes, row counts and factor vintages, which the
+loader verifies on every read and fails closed on. The rule doing the most work is the as-of rule: a
+month's bar becomes readable on the first day of the following month, and every join is gated by it.
+Without that gate, a window estimated at the end of March reads March's own return, which is
+look-ahead bias of one month and is nearly invisible in a performance table.
 
 **The factor layer.** The eleven sleeves are funds rather than firms, so the security-level style and
 industry attributes a commercial risk model would use are not available. What is available is a set of
 published index legs, called the named spine, and the sleeves' own construction, assembled into a
 constructed block of level, slope, credit and high-yield lines. The block's arithmetic is deliberately
 trivial: its loadings on four sleeves are identities rather than estimates, which is what makes those
-four checkable instead of merely fitted. Exposures are estimated per window by ordinary least squares
-and refitted monthly, with the block orthogonalised against itself so that each later loading is the
-clean reading. The statistical family is principal components, and the count is decided by a rule
-declared before it was applied: a component is retained when its eigenvalue beats the 95th percentile
-of a matched permutation null built from the panel's own marginals. Principal components extract
-directions of common variation; they do not select factors and they do not identify which directions
-are priced, so the count comes from that external criterion rather than from the extraction.
+four checkable instead of merely fitted. Exposures are estimated per window and refitted monthly, with
+the block orthogonalised against itself so that each later loading is the clean reading. The
+statistical family is principal components, and the count is decided by a rule declared before it was
+applied: a component is retained when its eigenvalue beats the 95th percentile of a matched permutation
+null built from the panel's own marginals. Principal components extract directions of common variation;
+they do not select factors and they do not identify which directions are priced, so the count comes
+from that external criterion rather than from the extraction.
 
 **The risk layer.** Three covariance estimators sit behind one interface: the sample covariance, linear
 shrinkage toward a structured target at an intensity the estimator estimates, and the covariance
@@ -69,25 +104,17 @@ the optimiser, and it is reported as such. There is no true covariance on this p
 estimators against, and a sample covariance is by construction the best fit to its own window, so an
 accuracy ranking would rank whichever estimator it was computed from first.
 
-**The construction layer.** Four mean inputs and the family list are crossed under one constraint set:
-long-only, fully invested, capped at 35% per sleeve, with a 1% no-trade band per sleeve and a 5%
-one-way turnover cap at each rebalance. The mean inputs are the sample mean, a shrunk mean, a
-Black-Litterman posterior whose prior is implied by the mandate's own weights, and no mean at all. The
-no-mean cell is the control: it isolates how much of each other cell's result the solver and the
-constraints were producing on their own. Cost is charged on *traded* notional at 10 bp per side, so a
-rebalance is billed for what it moves rather than for the book it holds, and a method that trades rarely
-is not penalised for holding a large book.
+**The construction layer.** Four mean inputs and the family list are crossed under one constraint set.
+The mean inputs are the sample mean, a shrunk mean, a Black-Litterman posterior whose prior is implied
+by the mandate's own weights, and no mean at all. The no-mean cell is the control: it isolates how much
+of each other cell's result the solver and the constraints were producing on their own.
 
 **The evaluation layer.** Every cell is estimated on a rolling sixty months with a monthly refit and
 trades only after its window ends. Comparing cells by their separate estimates would be useless at this
-length: one strategy's annualised ratio carries an interval wide enough that nearly every method sits
-inside every other's. Every comparison is therefore a paired test
-on the difference of two monthly return series, which works because the cells share a universe, a set
-of months and long-only books and are consequently highly correlated. A row is called a difference only
-when the paired test clears the family-wise bar over the sixteen declared cells, the cell keeps its rank
-in at least 80% of bootstrap resamples, and its sign holds under an expanding-window protocol. Failing
-any rung publishes the row as no difference detected, with the smallest difference the test would have
-caught printed beside it, so an absence is never read as an equivalence.
+length, since one strategy's annualised ratio carries an interval wide enough that nearly every method
+sits inside every other's. Every comparison is therefore a paired test on the difference of two monthly
+return series, which works because the cells share a universe, a set of months and long-only books and
+are consequently highly correlated.
 
 **Attribution and the risk budget.** The active return is decomposed twice, on the holdings in the
 Brinson-Fachler form and through the fitted factor exposures, and the two views are never summed
@@ -103,31 +130,109 @@ taken off it, so the comparison table, the workbook, the findings memo and the l
 describe different runs. Nine call sites used to assemble it for themselves, and two of them disagreed
 about the months a covariance was read over.
 
+The learning guide (`reporting/learning-guide.md`) walks through all of it with citations and the
+alternatives each layer displaced.
+
+---
+
 ## What is being compared
 
-Sixteen distinct cells, from twenty pre-registered runs, on one universe and one mandate. A cell is a
-construction family, a covariance estimator, a mean input and a protocol, fixed before any of them
-runs. The axes move one at a time: the family axis varies the objective at one covariance and one
-default mean, the risk-model axis varies the estimator across the two most covariance-dependent
-families, and the mean axis varies the input inside mean-variance. Two perturbation runs lift the
-per-sleeve cap and change nothing else, so a result that came from the constraint set rather than from
-the method is visible as such, and two repeats re-run the cells the mandate's question turns on under
-the expanding protocol. The count is declared in the code before any of them runs, because a search
-over sixteen methods whose size is reported after the results are seen is a search whose size was
-chosen by the results.
+Twenty pre-registered runs over sixteen distinct cells. The axes move one at a time: the family axis
+varies the objective at one covariance and one default mean, the risk-model axis varies the estimator
+across the two most covariance-dependent families, and the mean axis varies the input inside
+mean-variance. Two perturbation runs lift the per-sleeve cap and change nothing else, so a result that
+came from the constraint set rather than from the method is visible as such, and two repeats re-run the
+cells the mandate's question turns on under the expanding protocol.
 
-Two rows are not methods. One is the policy benchmark, the mandate's own weights, which is what every
-cell is measured against; the other is equal weight, which is the bar the literature uses and which
-several of the constructed books reproduce on this constraint set.
+| Cell | Stage | Family | Covariance | Mean | Protocol | Cap |
+| --- | --- | --- | --- | --- | --- | --- |
+| `equal_weight` | A | `equal_weight` | sample | default | rolling | 35% |
+| `policy` | A | `policy` | sample | default | rolling | 35% |
+| `mean_variance_shrunk` | A | `mean_variance` | sample | jorion | rolling | 35% |
+| `minimum_variance` | A | `minimum_variance` | sample | default | rolling | 35% |
+| `maximum_diversification` | A | `maximum_diversification` | sample | default | rolling | 35% |
+| `erc_unbounded` | A | `erc` | sample | default | rolling | uncapped |
+| `erc_bounded` | A | `erc` | sample | default | rolling | 35% |
+| `hierarchical_risk_parity` | A | `hierarchical_risk_parity` | sample | default | rolling | 35% |
+| `mean_cvar` | A | `mean_cvar` | sample | default | rolling | 35% |
+| `minimum_variance_shrinkage` | B | `minimum_variance` | shrinkage | default | rolling | 35% |
+| `minimum_variance_factor` | B | `minimum_variance` | factor | default | rolling | 35% |
+| `erc_shrinkage` | B | `erc` | shrinkage | default | rolling | 35% |
+| `erc_factor` | B | `erc` | factor | default | rolling | 35% |
+| `mean_variance_sample` | C | `mean_variance` | sample | sample | rolling | 35% |
+| `mean_variance_black_litterman` | C | `mean_variance` | sample | black_litterman | rolling | 35% |
+| `mean_variance_none` | C | `mean_variance` | sample | none | rolling | 35% |
+| `minimum_variance_uncapped` | A | `minimum_variance` | sample | default | rolling | uncapped |
+| `maximum_diversification_uncapped` | A | `maximum_diversification` | sample | default | rolling | uncapped |
+| `mean_variance_shrunk_expanding` | A | `mean_variance` | sample | jorion | expanding | 35% |
+| `minimum_variance_expanding` | A | `minimum_variance` | sample | default | expanding | 35% |
+
+Two rows are not methods. `policy` is the mandate's own weights, which every cell is measured against,
+and `equal_weight` is the bar the literature uses, which several constructed books reproduce on this
+constraint set.
+
+**The universe.** Eleven UCITS ETF sleeves, one instrument each. A line survives only if it carries
+exposure the panel cannot separate otherwise.
+
+| Instrument | Sleeve | Group | Policy weight | Currency |
+| --- | --- | --- | --- | --- |
+| `IWDA.AS` | `equity_dev` | equity | 30% | EUR |
+| `IMEU.AS` | `equity_eu` | equity | 8% | EUR |
+| `XACT-NORDEN.ST` | `equity_nordic` | equity | 4% | SEK |
+| `IBGL.AS` | `gov_long` | government | 12% | EUR |
+| `IEGE.AS` | `gov_short` | government | 5% | EUR |
+| `IEAC.AS` | `credit_ig` | credit | 13% | EUR |
+| `IHYG.L` | `credit_hy` | credit | 4% | EUR |
+| `IBCI.AS` | `inflation_linked` | government | 5% | EUR |
+| `4GLD.DE` | `gold` | real_and_cash | 5% | EUR |
+| `IWDP.AS` | `real_estate` | real_and_cash | 4% | EUR |
+| `XEON.DE` | `cash` | real_and_cash | 10% | EUR |
+
+Two sleeve candidates were dropped for reasons recorded beside the universe: one for near-collinearity
+with an existing line, one because its feed is dividend-blind and therefore not a total-return series.
+
+**The mandate and its constraints.**
+
+| What is fixed | Value |
+| --- | --- |
+| Panel | 2010-09 to 2026-07, 191 monthly bars |
+| Traded window | 2015-09 to 2026-07, 131 months |
+| Estimation | Rolling 60 months, monthly refit |
+| Benchmark | The policy weights above, held fixed |
+| Long-only, fully invested | Yes, at every step |
+| Per-sleeve cap | 35% |
+| No-trade band | 1% per sleeve |
+| Turnover cap | 5% one-way at each rebalance |
+| Cost | 10 bp per side on traded notional, sensitivity at 5, 20 and 40 bp |
+| Declared risk budget | Equity 55%, government 20%, credit 15%, real assets and cash 10% |
+
+The declared budget is what makes "is the risk budget consumed by design or by accident?" a measurable
+question, and the ordered sleeve map is load-bearing: every weight vector in the package is indexed by
+it, so reordering the map would misalign weights against returns without raising anything.
+
+---
 
 ## What it found
 
 **No cell cleared every rung of the declared ladder, so the negative result is the finding.** The
-sample's leader cleared the family-wise bar and then failed the rank-retention rung, keeping its rank
-in only 67.5% of bootstrap resamples against the 80% floor declared in advance. Eight of the runs that
-do clear the bar sit significantly behind the policy benchmark once cost is charged. Every cell that
-carries a verdict of no difference detected, and every cell declared a negative result, is published
-with that verdict and its resolution limit on the row.
+sample's leader cleared the family-wise bar and failed the rank-retention rung, keeping its rank in
+only 67.5% of bootstrap resamples against the 80% floor declared in advance. Eight of the runs that do
+clear the bar sit significantly behind the policy benchmark once cost is charged.
+
+![Every cell's tracking error against its information ratio.](reporting/figures/fig1-cell-dispersion.svg)
+
+*Every run's tracking error against its information ratio. The cells separate along tracking error far
+more than along the information ratio, and the mean-variance family sits alone on the right.*
+
+![Each run's share of bootstrap resamples in which it leads, against the floor.](reporting/figures/fig4-rank-retention.svg)
+
+*How often each run leads when the months are resampled. Only the leader clears a fifth of the
+resamples, and it falls short of the floor the design fixed before the resamples were drawn.*
+
+![Realised volatility contributions against the declared budget.](reporting/figures/fig3-risk-budget.svg)
+
+*Realised volatility contributions by group, against the vector the mandate declares. The mandate's own
+book departs from its declared split, and the constructed books depart further.*
 
 **What separates the families is tracking error rather than return.** The family cells span a tracking
 error of several percentage points a year, and that dispersion is large relative to what the test can
@@ -136,22 +241,55 @@ a ranking would suggest: the cells that differ from the benchmark differ by taki
 it, not by earning more.
 
 **The mean axis shows how much the input carries.** The three mean-carrying cells land close to one
-another on the information ratio and all three move their weight path substantially month to month.
+another on the information ratio, and all three move their weight path substantially month to month.
 Shrinking the mean does not calm that path on this panel, which is the honest reading of a standard
 remedy: it was applied, and the instability is still there.
 
-**The risk budget is consumed by accident rather than by design.** The mandate's own book departs from
-the volatility split it declares, and the constructed books depart further, because a risk-based family
-concentrates volatility wherever the covariance puts it and no cell's objective mentioned the budget.
-That is a property of the mandate as much as of the methods, and it is why the vector is declared in
-the data layer rather than inferred afterwards.
+**The risk budget is consumed by accident rather than by design.** A risk-based family concentrates
+volatility wherever the covariance puts it, and no cell's objective mentioned the budget. That is a
+property of the mandate as much as of the methods.
+
+Two further figures carry the cost sensitivity and the eigenvalue spectrum: `reporting/figures/fig2-cost-multiple.svg`
+and `reporting/figures/fig5-eigenvalues.svg`.
+
+---
+
+## How a row gets its verdict
+
+```mermaid
+flowchart TD
+    C[A run, measured against the policy benchmark over the traded months] --> Q1{Does the paired test clear the family-wise bar?}
+    Q1 -->|no| V1[no difference detected<br/>with the resolution limit printed beside it]
+    Q1 -->|yes| Q2{Does it keep its rank in 80% of bootstrap resamples?}
+    Q2 -->|no| V2[no difference detected<br/>the advantage does not survive resampling]
+    Q2 -->|yes| Q3{Does the sign hold under the expanding protocol?}
+    Q3 -->|no| V3[no difference detected<br/>the sign does not hold]
+    Q3 -->|not run| V4[different on the paired test<br/>the expanding leg was not run]
+    Q3 -->|yes| V5[recommendation candidate]
+```
+
+| Verdict | What it means |
+| --- | --- |
+| A difference | The bar, the rank retention and the expanding-window sign all passed |
+| No difference detected | The difference is smaller than this panel can resolve, or it failed a later rung |
+| A declared negative result | The book reproduces equal weight, which is a property of the constraint set |
+| Significantly behind | Different from the benchmark on the paired test, and behind it after cost |
+
+Every row carries the smallest information-ratio difference the test would have detected at 80% power.
+A reader who takes the absence of a difference for a statement of equivalence is making the second
+statement while appearing to make the first, which is the distinction the noise floor exists to keep
+visible. When the cells are correlated, the effective number of tests falls and with it the bar, so the
+conservative reading is the one applied: the correction is self-imposed from the literature rather
+than required by any located regulation, and the documents say so rather than borrowing authority for
+a choice.
+
+---
 
 ## How to read the result
 
-**A verdict of no difference detected is not a statement of equivalence.** The smallest difference the
-test would have detected is printed on every row, and a reader who reads the absence as equality is
-making the second statement while appearing to make the first. Where a difference is reported, it is
-reported with the three conditions that produced it.
+**A verdict of no difference detected is not a statement of equivalence.** The resolution limit is
+printed on every row, and a difference that is reported comes with the three conditions that produced
+it.
 
 **The leader's advantage has the two signatures of estimation error.** An advantage that does not
 survive resampling, and a weight path that moves when the estimation window shifts by a single month,
@@ -163,44 +301,53 @@ contributions sum to portfolio volatility, and the factor model's unexplained pa
 own measured quantity. A decomposition that hides its residual cannot be checked.
 
 **One panel bounds everything.** Eleven sleeves, one mandate and one currency: a difference this design
-cannot resolve is not reported as an absence, and a difference it does resolve is a statement about
-this universe rather than about construction in general. The memo's limitations section states the
-bound in full, and the decision record states the conditions under which the recommendation would be
-withdrawn.
+cannot resolve is not reported as an absence, and a difference it does resolve is a statement about this
+universe rather than about construction in general.
+
+---
 
 ## The conclusion
 
 **Retain the policy benchmark and change nothing.** The chosen option is the one already held, so its
 cost is nil, and the alternative was to pay a construction cost to move to a book whose advantage the
-data does not support. The practical value of the exercise runs in two directions: it quantifies how
-much of a methodological choice survives when cost, multiple testing and resampling are charged against
-it, which is a more useful quantity than a ranking of in-sample fits; and it is a worked example of the
-whole chain, from a licensed data source through a look-ahead-free panel, a documented risk model,
-constrained construction, a paired out-of-sample evaluation and two decompositions, with every number
-traceable to the module that computed it.
+data does not support. The practical value runs in two directions: the exercise quantifies how much of a
+methodological choice survives when cost, multiple testing and resampling are charged against it, which
+is a more useful quantity than a ranking of in-sample fits; and it is a worked example of the whole
+chain, from a licensed data source through a look-ahead-free panel, a documented risk model, constrained
+construction, a paired out-of-sample evaluation and two decompositions, with every number traceable to
+the module that computed it.
 
 The recommendation is withdrawn or revisited on any of five conditions: a rerun that no longer
-reproduces the metric table within the stated tolerance; a cell that clears the bar, keeps its rank in
-at least 80% of resamples and holds its sign under the expanding protocol; a longer panel on which an
-absent difference remains absent while the resolution limit falls below it; a revised cost multiple
-that removes the leader's advantage; or a change to the constraint set that would make a family's
-result a result about the constraints.
+reproduces the metric table within the stated tolerance; a cell that clears the bar, keeps its rank in at
+least 80% of resamples and holds its sign under the expanding protocol; a longer panel on which an
+absent difference remains absent while the resolution limit falls below it; a revised cost multiple that
+removes the leader's advantage; or a change to the constraint set that would make a family's result a
+result about the constraints.
 
-Nothing here is a claim about a live book, a client or a regulated activity. The exercise is a
-simulation performed in role, and the numbers quoted above are the few that define the outcome: the
-full set is generated from the run by the documents in the next section, and those are pinned to their
-generators by the test suite, so a number cannot drift from the code that computed it.
+Nothing here is a claim about a live book, a client or a regulated activity. The numbers quoted above
+are the few that define the outcome; the full set is generated from the run by the documents below, and
+the test suite pins those to their generators so a number cannot drift from the code that computed it.
 
-## The universe and the window
-
-Eleven UCITS ETF sleeves (developed and European and Nordic equity, short and long government,
-investment-grade and high-yield credit, inflation-linked, gold, real estate, and a euro cash line),
-priced in EUR except where the fund's own denomination is SEK. The joined panel runs 2010-09 to
-2026-07, 191 months; the out-of-sample window is 131 months, 2015-09 to 2026-07. Two sleeve candidates
-were dropped for reasons recorded beside the universe: one for near-collinearity with an existing
-line, one because its feed is dividend-blind and therefore not a total-return series.
+---
 
 ## Layout
+
+```mermaid
+flowchart TD
+    data[data: contract, loader, quality gate] --> factors[factors: spine, exposures, components]
+    data --> risk[risk: covariances]
+    factors --> risk
+    factors --> construct[construct: means, objectives, constraints]
+    risk --> construct
+    construct --> evaluate[evaluate: walk-forward, metrics, statistics]
+    construct --> attribute[attribute: holdings and factor views]
+    risk --> budget[budget: Euler decomposition]
+    construct --> budget
+    evaluate --> compare[compare: registry, grid, table]
+    attribute --> compare
+    budget --> compare
+    compare --> reporting[reporting: workbook, notebooks, memo, guide, figures]
+```
 
 ```
 portfolio_workbench/
@@ -238,27 +385,24 @@ python3 -m portfolio_workbench.facade            # the contract and the five ent
 python3 -m portfolio_workbench.data.coverage     # the panel's shape and coverage
 ```
 
-Every layer module is runnable the same way and prints its own report; each states its assumptions,
-the resolution limit of the number it prints, and what the number does not establish. Only the grid
-writes anything, and it writes outside version control.
+Every layer module is runnable the same way and prints its own report; each states its assumptions, the
+resolution limit of the number it prints, and what the number does not establish. Only the grid writes
+anything, and it writes outside version control.
 
 ## What it publishes
 
-```bash
-python3 -m reporting.workbook        # the Excel export, into .data/runs/<snapshot>/
-python3 -m reporting.notebooks       # writes notebooks/ and executes every one
-python3 -m reporting.memo            # the findings memo and the decision record
-python3 -m reporting.guide           # the learning guide, written from the same run
-python3 -m reporting.figures         # the figures the guide and the notebooks reference
-python3 -m reporting.skills_matrix   # the coverage matrix and its check
-```
+| Command | What it writes | Who reads it |
+| --- | --- | --- |
+| `python3 -m reporting.memo` | `reporting/findings-memo.md`, answering the seven research questions, and `reporting/decision-record.md`, the one page a committee would sign | The mandate's own record |
+| `python3 -m reporting.guide` | `reporting/learning-guide.md`: the exercise end to end, with the method, the results, their limits and a glossary | A reader meeting the work for the first time |
+| `python3 -m reporting.figures` | `reporting/figures/`, the five figures the guide and this page carry | A reader of either |
+| `python3 -m reporting.workbook` | The Excel export of the two stacked blocks, into `.data/runs/<snapshot>/` | A reader who wants to sort and filter it |
+| `python3 -m reporting.notebooks` | `notebooks/`, one executed notebook per entry point, on the seven-section spine | A reviewer checking a single layer |
+| `python3 -m reporting.skills_matrix` | The coverage matrix, and whether every claim in it is backed by a module that runs | A reader asking what the exercise demonstrates |
 
-The findings memo (`reporting/findings-memo.md`) answers the seven research questions in order, and the
-decision record (`reporting/decision-record.md`) is the one page a committee would sign. Both are
-generated from the code that owns the numbers they quote, so neither can drift from the run it
-describes. The learning guide (`reporting/learning-guide.md`) is generated from the same run and reads
-the exercise end to end: where the data comes from, what each layer does and why it is shaped that way,
-what the results say, and what they do not.
+The memo, the record and the guide are generated from the code that owns the numbers they quote, and
+the acceptance fixture asserts each file byte-equals its generator's output, so none of the three can
+drift from the run it describes.
 
 ## Data
 
@@ -291,12 +435,16 @@ Point the loader at a snapshot with `WORKBENCH_SNAPSHOT` or by passing a directo
 ## Tests
 
 `python3 -m pytest -q` runs offline against a synthetic, shape-matched snapshot for the identity and
-boundary checks, and against the frozen snapshot for the end-to-end acceptance run. The suite asserts
-what the modules claim: hand-calculated identities and closed forms, the walk-forward boundary, the
-as-of rule, every stop and warning fired on a planted input, the constraint rules, and the direction
-of the import graph. Two checks take most of the runtime, because each runs the whole stack once, and
-the acceptance fixture also reads the three generated documents against their generators, the guide's
-glossary against its own body, and the figures off disk for their presence and their licence posture.
+boundary checks, and against the frozen snapshot for the end-to-end acceptance run.
+
+| Family | What it pins |
+| --- | --- |
+| `tests/test_identities.py` | Hand-calculated identities and closed forms, on cases small enough to check on paper |
+| `tests/test_boundaries.py` | The walk-forward boundary, the as-of rule, the constraint rules, a planted look-ahead break |
+| `tests/test_data_rules.py` | Every stop and warning fired on a planted snapshot |
+| `tests/test_acceptance.py` | One end-to-end run on the frozen snapshot, the import direction, the generated documents against their generators, the guide's glossary, the figures' presence and their licence posture, and the two tables on this page against the declarations they restate |
+
+Two checks take most of the runtime, because each runs the whole stack once.
 
 ## Vocabulary
 

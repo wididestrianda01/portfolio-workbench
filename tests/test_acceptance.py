@@ -16,6 +16,7 @@ information ratio, which is asserted as a direction rather than as a value.
 
 import ast
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -587,6 +588,95 @@ def test_the_figures_exist_and_draw_no_instrument_series():
         assert not named, f"{path.name} names an instrument, so it may be drawing a series: {named}"
     for kind in ("price", "level", "nav", "index_level"):
         assert kind not in figures_module.KINDS, f"{kind} is a drawable kind of quantity"
+
+
+def test_the_readme_tables_reprint_the_declarations():
+    """The two data tables on the front page are restatements, so they are read back against the code.
+
+    A README that lists twenty runs and eleven sleeves by hand is the most drift-prone artifact in the
+    repository: a cell added to the registry or a weight changed in the universe would leave the page a
+    reader meets first describing a grid the package no longer runs. The tables are therefore parsed
+    out of the file and compared, cell by cell, against the declarations they restate. The prose is not
+    checked, because prose is not a claim of equality with anything.
+    """
+    from portfolio_workbench.compare import registry
+    from portfolio_workbench.construct import constraints
+    from portfolio_workbench.data import universe
+
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "README.md").read_text()
+    rows = {}
+    for line in text.split("\n"):
+        if not line.startswith("| "):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        # Only the rows about an identifier are data: a table header is not keyed, because two tables
+        # on the page may share one ("Family" heads the objectives and the test families alike).
+        if not cells or not (cells[0].startswith("`") and cells[0].endswith("`")):
+            continue
+        if cells[0] in rows:
+            raise AssertionError(f"the README carries two rows keyed {cells[0]}")
+        rows[cells[0]] = cells
+
+    for spec in registry.RUNS:
+        key = f"`{spec['id']}`"
+        assert key in rows, f"{spec['id']} is declared in the registry and absent from the README"
+        row = rows[key]
+        assert row[1] == spec["stage"], key
+        assert row[2] == f"`{spec['family']}`", key
+        assert row[3] == spec["estimator"], key
+        assert row[4] == (spec["mean"] or "default"), key
+        assert row[5] == spec["protocol"], key
+        assert row[6] == ("35%" if spec["cap"] == constraints.CAP else "uncapped"), key
+
+    for ticker, (sleeve, currency) in universe.SLEEVES.items():
+        key = f"`{ticker}`"
+        assert key in rows, f"{ticker} is in the universe and absent from the README"
+        row = rows[key]
+        assert row[1] == f"`{sleeve}`", key
+        assert row[2] == universe.GROUP[sleeve], key
+        assert row[3] == f"{universe.POLICY_WEIGHTS[ticker]:.0%}", key
+        assert row[4] == currency, key
+
+    assert len(rows) >= len(registry.RUNS) + len(universe.SLEEVES)
+
+
+def test_the_readme_diagrams_are_well_formed():
+    """A mermaid block that names an undefined node renders as an error box on the page.
+
+    The check is structural rather than semantic: every block opens and closes, every label's brackets
+    balance, and every node an edge refers to is defined somewhere in the same block. That catches the
+    failure a typo produces, which is the failure a reader would see, and it does not pretend to
+    validate mermaid itself.
+    """
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "README.md").read_text()
+    blocks = re.findall(r"```mermaid\n(.*?)```", text, re.S)
+    assert blocks, "the README carries no diagram"
+
+    for block in blocks:
+        assert block.count("[") == block.count("]"), block[:80]
+        assert block.count("{") == block.count("}"), block[:80]
+        defined = set()
+        for line in block.split("\n"):
+            for node in re.finditer(r"(\w+)\s*[\[\{]", line):
+                defined.add(node.group(1))
+            for subgraph in re.finditer(r"subgraph\s+(\w+)", line):
+                defined.add(subgraph.group(1))
+        edges = 0
+        for line in block.split("\n"):
+            parts = re.split(r"\s*(?:-->|-.->|---)\s*", line)
+            for previous, following in zip(parts, parts[1:]):
+                source = re.match(r"\s*(\w+)", previous)
+                # An edge label leads the target part (`Q1 -->|no| V1`), so it is stripped before the
+                # node id is read rather than being mistaken for one.
+                target = re.match(r"(\w+)", re.sub(r"^\s*\|[^|]*\|\s*", "", following))
+                assert source, f"an edge in the README starts with no node: {line.strip()[:60]}"
+                assert source.group(1) in defined, f"{source.group(1)} is used and never defined"
+                assert target, f"an edge in the README ends with no node: {line.strip()[:60]}"
+                assert target.group(1) in defined, f"{target.group(1)} is used and never defined"
+                edges += 1
+        assert edges, "a diagram in the README carries no edge"
 
 
 def test_every_method_is_traced_to_a_cited_source():
