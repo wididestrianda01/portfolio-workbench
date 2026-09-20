@@ -29,12 +29,11 @@ those weights. Practitioners choose between families that ask different question
 Each family consumes a different set of inputs, and the literature is unusually united on one point:
 the mean is the input carrying the most estimation error.
 
-The decision in front of a committee is narrower than a search for the best method. It can leave the
-book alone, in which case it trades nothing and pays nothing, or it can adopt a constructed book, in
-which case it pays the cost of getting there and of staying there. That is why the question here is not
-which method is best in general. It is which methodological choices move the outcome on this mandate,
-by how much, on which metric, and what the change costs. What comes out is a table of verdicts on
-sixteen cells, not a ranking, and the negative results are published beside the positive ones.
+A committee can leave the book alone, in which case it trades nothing and pays nothing, or it can adopt
+a constructed book, in which case it pays the cost of getting there and of staying there. So the question
+here is not which method is best in general, but which methodological choices move the outcome on this
+mandate, by how much, on which metric, and what the change costs. What comes out is a table of verdicts
+on sixteen cells, not a ranking, and the negative results are published beside the positive ones.
 
 ---
 
@@ -79,10 +78,10 @@ for the overnight rate chain, spliced from EONIA to the euro short-term rate at 
 overlap measured rather than assumed; the Fama/French archives for the developed-market factor legs; and
 a public price feed for the fund bars, read with the feed's adjusted close as the total-return proxy.
 The snapshot carries a manifest of instruments, file hashes, row counts and factor vintages, which the
-loader verifies on every read and fails closed on. The rule doing the most work is the as-of rule: a
-month's bar becomes readable on the first day of the following month, and every join is gated by it.
-Without that gate, a window estimated at the end of March reads March's own return, which is
-look-ahead bias of one month and is nearly invisible in a performance table.
+loader verifies on every read and fails closed on. The as-of rule gates every join: a month's bar
+becomes readable on the first day of the following month. Without that gate, a window estimated at the
+end of March reads March's own return, which is look-ahead bias of one month and is nearly invisible in
+a performance table.
 
 **The factor layer.** The eleven sleeves are funds rather than firms, so the security-level style and
 industry attributes a commercial risk model would use are not available. What is available is a set of
@@ -214,14 +213,14 @@ it, so reordering the map would misalign weights against returns without raising
 
 ## What it found
 
-**The ranking is unresolved, and the advantage is not.** No cell cleared every rung of the declared
+The ranking is unresolved, and the advantage is not. No cell cleared every rung of the declared
 ladder, so the design nominates none: the sample's leader cleared the family-wise bar, kept the sign of
 its own advantage in 95.9% of bootstrap resamples and held it under the expanding protocol, and failed
 only the rung that asks whether one cell is uniquely best, keeping its rank in 67.5% of the same
 resamples against the 80% floor. Those are two different questions, and the row reports both: an
 advantage the resampling keeps, and an ordering it does not.
 
-**What the same table supports is the mean input.** All three cells carrying a mean clear the
+All three cells carrying a mean clear the
 family-wise bar on their own row (z 4.05, 3.91 and 3.37 against 2.9552), keeping the sign of the
 advantage in 96%, 95% and 90% of resamples, while the same construction with no mean clears nothing and
 returns -0.573. Which of the three to hold is not resolvable here: the leading two sit 0.027 apart on
@@ -243,18 +242,16 @@ resamples, and it falls short of the floor the design fixed before the resamples
 *Realised volatility contributions by group, against the vector the mandate declares. The mandate's own
 book departs from its declared split, and the constructed books depart further.*
 
-**What separates the families is tracking error rather than return.** The family cells span a tracking
-error of several percentage points a year, and that dispersion is large relative to what the test can
-resolve, which makes the family the axis that matters most on this panel. The direction cuts both ways:
-eight cells that clear the bar sit behind the benchmark after cost, and the three that sit ahead of it
-are the ones carrying a mean input.
+The family cells span a tracking error of several percentage points a year, and that dispersion is
+large relative to what the test can resolve, which makes the family the axis that matters most on this
+panel. The direction cuts both ways: eight cells that clear the bar sit behind the benchmark after cost,
+and the three that sit ahead of it are the ones carrying a mean input.
 
-**The mean axis shows how much the input carries.** The three mean-carrying cells land close to one
-another on the information ratio, and all three move their weight path substantially month to month.
-Shrinking the mean does not calm that path on this panel, which is the honest reading of a standard
-remedy: it was applied, and the instability is still there.
+The three mean-carrying cells land close to one another on the information ratio, and all three move
+their weight path substantially month to month. Shrinking the mean does not calm that path on this
+panel: the standard remedy was applied, and the instability is still there.
 
-**The risk budget is consumed by accident rather than by design.** A risk-based family concentrates
+The risk budget is consumed by accident rather than by design. A risk-based family concentrates
 volatility wherever the covariance puts it, and no cell's objective mentioned the budget. That is a
 property of the mandate as much as of the methods.
 
@@ -301,29 +298,29 @@ a choice.
 
 ## How to read the result
 
-**A verdict of no difference detected is not a statement of equivalence.** The resolution limit is
+A verdict of no difference detected is not a statement of equivalence. The resolution limit is
 printed on every row, and a difference that is reported comes with the three conditions that produced
 it.
 
-**The leader has an advantage the resampling keeps and a rank it does not.** The advantage survives
+The leader has an advantage the resampling keeps and a rank it does not. The advantage survives
 every rung about the cell itself; the ordering of the near-tied cells does not, and the leader's weight
 path moves 6.91% a month where a fixed-weight book's moves not at all. That movement is the signature
 of a method leaning on its estimates, and the weight-stability diagnostic is reported for every cell so
 that a reader can see it rather than take it on trust.
 
-**The residuals are named rather than absorbed.** The attribution reconciles after linking, the Euler
+The residuals are named rather than absorbed. The attribution reconciles after linking, the Euler
 contributions sum to portfolio volatility, and the factor model's unexplained part is reported as its
 own measured quantity. A decomposition that hides its residual cannot be checked.
 
-**One panel bounds everything.** Eleven sleeves, one mandate and one currency: a difference this design
+One panel bounds everything. Eleven sleeves, one mandate and one currency: a difference this design
 cannot resolve is not reported as an absence, and a difference it does resolve is a statement about this
 universe rather than about construction in general.
 
 ---
 
-## The conclusion
+## The recommendation
 
-**Move the objective to a mean-input mean-variance construction, and do not claim a variant.** The
+Move the objective to a mean-input mean-variance construction, and do not claim a variant. The
 pre-registered ladder nominates no cell, because the leader failed the rung that asks whether one cell
 is uniquely best; the recommendation is made one level up, on the axis those cells share, where all
 three clear the same family-wise bar and the no-mean control does not. The variant is not named,
@@ -332,13 +329,12 @@ than a replacement: the family trades 41.3% to 45.1% a year in one-way turnover 
 of return a year, which its advantage survives, and the tilt is sized so that the mandate's volatility
 and its declared risk budget stay where the mandate put them.
 
-The practical value runs in two directions: the exercise quantifies how much of a methodological choice
-survives when cost, multiple testing and resampling are charged against it, which is a more useful
-quantity than a ranking of in-sample fits, and it keeps apart the two questions resampling can answer -
-whether an advantage is measured, and whether a ranking is; and it is a worked example of the whole
-chain, from a licensed data source through a look-ahead-free panel, a documented risk model, constrained
-construction, a paired out-of-sample evaluation and two decompositions, with every number traceable to
-the module that computed it.
+The exercise quantifies how much of a methodological choice survives when cost, multiple testing and
+resampling are charged against it. That is a more useful quantity than a ranking of in-sample fits, and
+it keeps apart the two questions resampling can answer: whether an advantage is measured, and whether a
+ranking is. It is also a worked example of the whole chain, from a licensed data source through a
+look-ahead-free panel, a documented risk model, constrained construction, a paired out-of-sample
+evaluation and two decompositions, with every number traceable to the module that computed it.
 
 The recommendation is withdrawn or revisited on any of six conditions: a rerun that no longer
 reproduces the metric table within the stated tolerance; the mean-carrying cells losing the bar or the
