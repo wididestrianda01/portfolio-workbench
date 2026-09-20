@@ -41,7 +41,9 @@ DECLARATION = (
     "communication, and the register is deliberate."
 )
 
-# The claim paragraph the skills matrix fixes as the memo's opening, adopted verbatim.
+# The claim paragraph the skills-inventory decision fixes, adopted verbatim and carried directly under
+# the committee's question. The wording is a decided text, so it is not re-punctuated here; what this
+# memo changed is where it sits, not what it claims.
 CLAIM = (
     "As a learning exercise, this project demonstrates on real data the ability to take a European "
     "multi-asset universe from a frozen, as-of-correct panel through factor and risk modelling, "
@@ -59,8 +61,8 @@ def collect(root=None):
     """Run the analysis the memo reports on, and add the factor readings only the memo needs.
 
     The analysis owns the run, the covariance behind the risk budget and the two decompositions. What
-    is added here is the count series, the headline decomposition and the spanning directions, which
-    this memo is the only reader of - pulling them into the analysis would widen its interface without
+    is added here is the count series, the headline decomposition and the spanning directions, and
+    this memo is their only reader. Pulling them into the analysis would widen its interface without
     giving a second caller anything.
     """
     analysis = study.analyse(loader.load_panel(root))
@@ -106,7 +108,7 @@ MEAN_CELLS = ("mean_variance_sample", "mean_variance_shrunk", "mean_variance_bla
 def _stage(rows, stage):
     """The method cells of one stage.
 
-    The two bars are not methods - one is the benchmark and one is the naive portfolio - and a
+    The two bars are not methods, since one is the benchmark and one is the naive portfolio, and a
     dispersion measured across them would be the width of the comparison rather than the width of the
     choice. The perturbation runs and the expanding repeats are excluded for the same reason: they are
     the same method revisited, and counting them twice would weight one method twice in a range.
@@ -152,6 +154,18 @@ def memo(evidence):
         "",
         DECLARATION,
         "",
+        "## The committee's question",
+        "",
+        "The exercise is performed in the role of a portfolio constructor reporting to an investment "
+        "committee, on a real European multi-asset universe and real market data. The committee holds a "
+        "balanced mandate at fixed strategic weights, and at this review it has to decide whether to "
+        "leave that book alone or to pay for a different construction method. Paying means trading, "
+        "trading means cost charged on traded notional, and a method that looks better before cost can be "
+        "worse after it. The question is therefore narrow: which methodological choices move the outcome "
+        "on this mandate, by how much, on which metric, and what does the change cost? The seven "
+        "questions below take it apart in the order the build answers them, and the decision record "
+        "beside this memo is the one page the committee would sign.",
+        "",
         CLAIM,
         "",
         "## What was run",
@@ -172,31 +186,31 @@ def memo(evidence):
         f"{sheet['adjusted_bar']:.4f}; the conservative value decides. That correction is self-imposed from the "
         "literature and is not a regulatory requirement.",
         "",
-        "## RQ1 - Do the construction families differ out of sample on this mandate, and on which metric?",
+        "## RQ1. Do the construction families differ out of sample on this mandate, and on which metric?",
         "",
         _rq1(stage_a, behind, leader_row, sheet),
         "",
-        "## RQ2 - Does the risk-model choice matter as much as the constructor choice?",
+        "## RQ2. Does the risk-model choice matter as much as the constructor choice?",
         "",
         _rq2(stage_a, stage_b, lo_te, hi_te, lo_b_te, hi_b_te, lo_vol, hi_vol, lo_b_vol, hi_b_vol),
         "",
-        "## RQ3 - How much turns on the mean input?",
+        "## RQ3. How much turns on the mean input?",
         "",
         _rq3(stage_c, by_cell),
         "",
-        "## RQ4 - Does the factor set matter: does either set span the other?",
+        "## RQ4. Does the factor set matter: does either set span the other?",
         "",
         _rq4(directions, headline),
         "",
-        "## RQ5 - How many factors does this panel support, and on what evidence?",
+        "## RQ5. How many factors does this panel support, and on what evidence?",
         "",
         _rq5(counts, headline),
         "",
-        "## RQ6 - Is the risk budget consumed by design or by accident?",
+        "## RQ6. Is the risk budget consumed by design or by accident?",
         "",
         _rq6(policy_budget, leader_budget, leader, link_worst, additivity_worst, evidence),
         "",
-        "## RQ7 - What does the choice cost, and is the apparent winner exploiting estimation error?",
+        "## RQ7. What does the choice cost, and is the apparent winner exploiting estimation error?",
         "",
         _rq7(cost, leader_row, sheet),
         "",
@@ -206,7 +220,7 @@ def memo(evidence):
         "detected or a declared negative result, and each carries its resolution limit on the row it was "
         "read from:",
         "",
-        "\n".join(f"- **{entry['cell']}** - {entry['verdict']}" for entry in negatives),
+        "\n".join(f"- **{entry['cell']}**: {entry['verdict']}" for entry in negatives),
         "",
         "The table's resolution on a typical row is printed beside its verdict; a reader who reads 'no "
         "difference detected' as 'equivalent' is reading the second statement while appearing to make the "
@@ -243,7 +257,7 @@ def _rq1(stage_a, behind, leader_row, sheet):
         f"smallest difference this test would detect on a typical row is of the order of "
         f"{np.median([row['paired_benchmark']['resolution'] for row in stage_a]):.2f} in information-ratio terms.\n\n"
         f"The direction is not the one a ranking would suggest. Every cell that is significantly different "
-        f"from the policy benchmark on the paired test is significantly **behind** it once the cost is "
+        f"from the policy benchmark on the paired test is significantly behind it once the cost is "
         f"charged ({len(behind)} cells), and the widest tracking error among the family cells, on "
         f"`{widest['cell']}`, comes with an "
         f"information ratio of {widest['information_ratio']:+.3f}. The best information ratio among them is "
@@ -482,7 +496,7 @@ def record(evidence):
             "",
             DECLARATION,
             "",
-            f"Snapshot `{document.snapshot_id}` - version {facade.VERSION} - written from "
+            f"Snapshot `{document.snapshot_id}`, version {facade.VERSION}, written from "
             f"{len(rows)} pre-registered runs over {len(sheet['cells'])} distinct cells.",
             "",
             "## 1. Recommendation",

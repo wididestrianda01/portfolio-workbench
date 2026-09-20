@@ -2,8 +2,8 @@
 
 One pass per run. In each month the estimate uses the trailing window the availability rule allows,
 the constructor turns it into a target, the trading rules turn the target into a book, and the book
-earns the following month's return. Every step is kept - the weights, the target, the trade, the
-cost and the binding - because a mean cannot show whether a cap bound once or every month, and the
+earns the following month's return. Every step is kept (the weights, the target, the trade, the
+cost and the binding) because a mean cannot show whether a cap bound once or every month, and the
 estimation-error diagnostics are properties of the path rather than of its average.
 
 Five things in here are decisions rather than mechanics.
@@ -13,7 +13,7 @@ Starting every method from the policy portfolio would put a transition trade ins
 window, and on this panel that trade is more than eleven times the turnover cap: the cap would be
 broken at inception, by construction, before the method had done anything. Each cell is therefore
 funded from cash at its own first target, the measured window holds no transition trade at all, and
-the establishment cost is reported as its own line - outside the window and outside the cap, visible
+the establishment cost is reported as its own line, outside the window and outside the cap, and visible
 rather than averaged away.
 
 **The diagnostics are read off the target path, not off the traded path.** Weight stability and

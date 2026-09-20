@@ -2,7 +2,7 @@
 
 The boundary the whole comparison rests on is one inequality: an estimate formed at the close of a
 month cannot read the next month's bar. It is a property of the calendar the windows are cut on, and
-it is invisible in a weight path - a cell that looked one month ahead returns plausible weights and a
+it is invisible in a weight path: a cell that looked one month ahead returns plausible weights and a
 flattering return series, and nothing in the row would say so. So the engine keeps a **record** rather
 than an intention. Every step carries the month traded, the window estimated on, the moment that
 window's last bar became readable and which bar set that moment; the run is then checked against the

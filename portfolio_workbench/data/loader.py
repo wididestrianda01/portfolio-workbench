@@ -7,8 +7,8 @@ bypasses the check, which is why the fetch script writes its manifest through
 `manifest.describe` rather than by hand.
 
 **The document is the seam, so its members are names rather than keys.** Every consumer used to
-reach into a bare dict - eighty-nine key reads across thirteen modules, with the same three keys
-re-typed into `panel.eur_excess_returns` at eleven of them - and a key renamed here surfaced as a
+reach into a bare dict (eighty-nine key reads across thirteen modules, with the same three keys
+re-typed into `panel.eur_excess_returns` at eleven of them) and a key renamed here surfaced as a
 `KeyError` in whichever report ran first rather than as a failed check. The document also carries
 the analytics frames derived from the legs (`returns`, `split`), because the loader is the one
 place that holds every leg at once and the frame eleven call sites each rebuilt is a frame eleven

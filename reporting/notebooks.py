@@ -1166,8 +1166,8 @@ print(f"annualisation {metrics.PERIODS_PER_YEAR} periods, sub-periods {[name for
         "drives": ("study.py",),
         "does": (
             "The analysis is not a method: it is the one place a snapshot's run and the readings taken off "
-            "it are assembled. Nine call sites used to do that for themselves - the five entry points, the "
-            "memo, the workbook, the grid's own report and the acceptance fixture - and an assembly is "
+            "it are assembled. Nine call sites used to do that for themselves (the five entry points, the "
+            "memo, the workbook, the grid's own report and the acceptance fixture), and an assembly is "
             "where a convention lives, which is how the risk budget came to be read against a covariance "
             "taken over a different set of months from the one the cells were built on. The entry point "
             "prints the shape of the run rather than a result: the numbers live in the modules behind it, "
@@ -1177,8 +1177,8 @@ print(f"annualisation {metrics.PERIODS_PER_YEAR} periods, sub-periods {[name for
             "The analysis consumes the document the loader returns and adds no contract of its own: the "
             "table contract, the as-of rule and the panel window belong to `data/`, and this module "
             "inherits them by reading what the loader handed it. What it does add is a constraint on the "
-            "readings - every one of them is taken over the months the run traded, and against one sample "
-            "covariance over those months - so a report naming a different window is describing a "
+            "readings: every one of them is taken over the months the run traded, and against one sample "
+            "covariance over those months, so a report naming a different window is describing a "
             "different object rather than a second view of this one."
         ),
         "example_note": (
@@ -1221,7 +1221,7 @@ print("covariance every reading is taken against: the sample covariance over the
             "their readings share are assembled in one place and stated by its entry point, so a reader "
             "holding the comparison table and the risk budget is holding two readings of one run. A reader "
             "must not read it as a result, because it computes nothing the modules behind it do not, and "
-            "must not read it as the mandate either - the panel window, the universe, the policy weights "
+            "must not read it as the mandate either: the panel window, the universe, the policy weights "
             "and the constraint set are this build's decisions for one panel, and a consumer with a "
             "different mandate supplies its own document."
         ),
@@ -1240,7 +1240,7 @@ print("covariance every reading is taken against: the sample covariance over the
         "drives": ("facade.py",),
         "does": (
             "The boundary is the whole of what a consumer of this engine adopts: the data contract it "
-            "satisfies, and the five entry points it then calls - factor exposures, risk models, "
+            "satisfies, and the five entry points it then calls: factor exposures, risk models, "
             "construction, evaluation, and attribution with the Euler risk budget. The module holds no "
             "arithmetic of its own. It binds each entry point to the layer modules that do the work, so "
             "the names a consumer imports are the modules this repository runs and not a second copy of "
@@ -1251,7 +1251,7 @@ print("covariance every reading is taken against: the sample covariance over the
             "carrying `period_month` and `available_from`, a manifest the loader verifies and fails "
             "closed on, and the as-of rule that a bar becomes readable on the first day of the month "
             "after the month it is labelled with. Nothing optional is added to it here, and no default "
-            "is applied on the consumer's behalf - the window, the universe, the policy weights and the "
+            "is applied on the consumer's behalf: the window, the universe, the policy weights and the "
             "constraint set are this build's decisions for one panel and one mandate, so a consumer "
             "with a different mandate passes its own frames and its own weights into the entry points "
             "rather than inheriting these."
@@ -1292,7 +1292,7 @@ print("no window, universe, policy weights or constraint set is applied by the b
         "reading": (
             "The boundary is the surface a consumer pins: a revision tagged in this repository, with "
             "the contract above it and five named entry points behind it. A reader must not read the "
-            "grouping as a completeness claim about portfolio methods - it is the order this build "
+            "grouping as a completeness claim about portfolio methods. It is the order this build "
             "exercises them in, and the risk budget sits inside the attribution group because the two "
             "decompose the same realised series. A reader must not read the version constant as a "
             "guarantee either: the repository tag pins the commit, and a consumer that imports the layer "
@@ -1303,7 +1303,7 @@ print("no window, universe, policy weights or constraint set is applied by the b
             "the contract is a table shape, and whether another project's files carry it is decided by "
             "its own run of the quality gate and by comparing its returns with the pandas path. Nothing "
             "here establishes that the five groups are the five a different mandate needs, and nothing "
-            "here makes any claim about results - the numbers live in the modules behind these names, "
+            "here makes any claim about results: the numbers live in the modules behind these names, "
             "each with its own notebook stating what it does not establish."
         ),
     },

@@ -1,8 +1,8 @@
-"""The mean-input axis: four answers to "how much do I trust the estimated mean", behind one
+"""The mean-input axis: four answers to how far the estimated mean can be trusted, behind one
 interface.
 
-Every input returns the same thing - one mean vector over the sleeves, plus the diagnostics that say
-how it was formed - and the constructor that consumes it never learns which input produced it. That
+Every input returns the same thing (one mean vector over the sleeves, plus the diagnostics that say
+how it was formed) and the constructor that consumes it never learns which input produced it. That
 is what makes the axis an input choice rather than a code path, and it is why the four cells can be
 compared with the optimiser held fixed.
 
@@ -15,18 +15,18 @@ worth shrinking hard. Nothing is chosen here, so nothing here can be tuned to fl
 
 **The view is stated, and so is its uncertainty.** Black-Litterman needs a prior, a view and the
 view's uncertainty, and a cell that leaves any of the three implicit is reporting a number whose
-content is unknown. The prior is the returns implied by the mandate's own policy holdings - the
-reverse optimisation that defines the equilibrium in the method's own construction - at the same
+content is unknown. The prior is the returns implied by the mandate's own policy holdings (the
+reverse optimisation that defines the equilibrium in the method's own construction) at the same
 risk-aversion weight mean-variance uses. The view is the window's sample mean, one view per sleeve.
 The uncertainty is the sampling variance of that estimate, one over the observation count times the
-sleeve's own variance, which is the honest form of "I believe my own sample mean to the extent its
-standard error allows" rather than a chosen confidence.
+sleeve's own variance, which states the belief in the sample mean only as far as its own standard
+error reaches, rather than naming a chosen confidence.
 
 **What the tau-over-omega ratio does and does not move.** With the prior's scaling set to one over
 the observation count and the view's uncertainty to the same factor, the observation count cancels
 and the posterior depends only on the ratio between how much the prior is trusted and how much the
 view is. So a rerun at a different sample size is the same answer, and the sensitivity that matters
-is the ratio - which is why the cell reports the base case and the ratio run beside it instead of a
+is the ratio, which is why the cell reports the base case and the ratio run beside it instead of a
 single number whose provenance a reader cannot reconstruct.
 
 **All four are sample-based, and the sample is the window.** Every input is estimated from the same

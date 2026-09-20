@@ -2,7 +2,7 @@
 
 A stop means the panel is not the panel the results are keyed to, and it raises. A
 warning means the number is usable but qualified, and it prints beside the number it
-qualifies - never in a footnote, because a qualification a reader has to go looking for
+qualifies, never in a footnote, because a qualification a reader has to go looking for
 is a qualification that gets dropped.
 
 The eighth stop, a manifest mismatch, is enforced by `manifest.verify` before any frame

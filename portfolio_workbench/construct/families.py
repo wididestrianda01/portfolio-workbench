@@ -2,8 +2,8 @@
 
 Each family takes a window's covariance, a window's mean vector and the window's returns, and
 returns one labelled target weight vector under the package's constraint set. Every family is called
-with the same three inputs - a family that ignores the mean ignores it rather than being called
-differently - because the comparison varies one axis at a time and a second calling convention would
+with the same three inputs (a family that ignores the mean ignores it rather than being called
+differently) because the comparison varies one axis at a time and a second calling convention would
 be a second axis.
 
 Five things in here are decisions rather than mechanics.
@@ -38,7 +38,7 @@ smoothed over.
 **A rule-based family is projected onto the constraint set, and the projection is reported.**
 Equal weight and the policy portfolio sit inside the cap by construction. Hierarchical risk parity
 is a bisection with no bounds to set, so it is projected, and the projection changes it whenever a
-cap binds - which the report prints, because a cell that stops being the method it is named after
+cap binds, which the report prints, because a cell that stops being the method it is named after
 is a result about the constraint set.
 """
 

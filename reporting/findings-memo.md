@@ -2,6 +2,10 @@
 
 A learning exercise performed in role: a simulated mandate with no client and no institution. Nothing in this document is investment advice, a recommendation to any person, or a client communication, and the register is deliberate.
 
+## The committee's question
+
+The exercise is performed in the role of a portfolio constructor reporting to an investment committee, on a real European multi-asset universe and real market data. The committee holds a balanced mandate at fixed strategic weights, and at this review it has to decide whether to leave that book alone or to pay for a different construction method. Paying means trading, trading means cost charged on traded notional, and a method that looks better before cost can be worse after it. The question is therefore narrow: which methodological choices move the outcome on this mandate, by how much, on which metric, and what does the change cost? The seven questions below take it apart in the order the build answers them, and the decision record beside this memo is the one page the committee would sign.
+
 As a learning exercise, this project demonstrates on real data the ability to take a European multi-asset universe from a frozen, as-of-correct panel through factor and risk modelling, constrained portfolio construction across a pre-registered set of methods, walk-forward out-of-sample evaluation with paired testing and multiple-testing control, Brinson-Fachler and factor attribution with documented linking, and Euler risk-budget reporting against a stated budget, in Python and SQL, with every method traced to a cited source and every negative result published. It does not demonstrate discretion over a live book, client reporting, licensed vendor platforms, index construction or regulatory second-line work, and it claims model literacy in the vendor systems it cannot licence rather than hands-on use of them.
 
 ## What was run
@@ -10,21 +14,21 @@ The comparison is 16 distinct cells and 20 pre-registered runs on the frozen sna
 
 The bar over 16 cells is |z| >= 2.9552, and it is also the multiple-testing haircut: one test of one statistic serves both. The realised correlation between cells implies 5.3 effective tests, at which the bar would be 2.5758; the conservative value decides. That correction is self-imposed from the literature and is not a regulatory requirement.
 
-## RQ1 - Do the construction families differ out of sample on this mandate, and on which metric?
+## RQ1. Do the construction families differ out of sample on this mandate, and on which metric?
 
 7 family cells span a tracking error from 4.16% to 7.14% a year and an information ratio from -0.764 to +0.544. The dispersion is the answer to whether the family matters, and it is large relative to the test's resolution: the family moves tracking error by hundreds of basis points, while the smallest difference this test would detect on a typical row is of the order of 0.54 in information-ratio terms.
 
-The direction is not the one a ranking would suggest. Every cell that is significantly different from the policy benchmark on the paired test is significantly **behind** it once the cost is charged (8 cells), and the widest tracking error among the family cells, on `erc_unbounded`, comes with an information ratio of -0.747. The best information ratio among them is `mean_variance_shrunk` at +0.544, and that cell carries a mean input rather than a risk-based objective, which is the axis RQ3 reads.
+The direction is not the one a ranking would suggest. Every cell that is significantly different from the policy benchmark on the paired test is significantly behind it once the cost is charged (8 cells), and the widest tracking error among the family cells, on `erc_unbounded`, comes with an information ratio of -0.747. The best information ratio among them is `mean_variance_shrunk` at +0.544, and that cell carries a mean input rather than a risk-based objective, which is the axis RQ3 reads.
 
 The metric the question turns on is therefore tracking error rather than return: what separates these families is how much risk they take away from the benchmark, and the leader on the full sample, `mean_variance_shrunk`, keeps its rank in only 67.5% of bootstrap resamples against the 80% floor.
 
-## RQ2 - Does the risk-model choice matter as much as the constructor choice?
+## RQ2. Does the risk-model choice matter as much as the constructor choice?
 
 Across the 4 cells of the risk-model axis, tracking error moves over 1.75% (4.40% to 6.15%) and volatility over 1.76%. The family axis moves tracking error over 2.99% and volatility over 10.02% across its 7 cells. On this panel the risk-model choice therefore moves the outcome less than the constructor choice: swapping the covariance estimator changes the book, and it changes it by about a quarter as much as swapping the objective does.
 
 That reading has a stated precondition, and it is the one the risk layer reports: at sixty months and 11 sleeves the sample covariance's condition number makes the optimiser the object under test far more than the estimator. The three estimators differ in conditioning, and the matrix the shrinkage draws toward is a choice inside the estimator rather than a property of the panel, so the dispersion measured here is a lower bound on what a differently structured risk model would produce.
 
-## RQ3 - How much turns on the mean input?
+## RQ3. How much turns on the mean input?
 
 The mean input is the axis where the answer is least like a ranking. Four cells share one covariance and one constraint set and differ only in the mean:
 
@@ -37,19 +41,19 @@ The three cells that carry a mean land within 0.152 of each other on the informa
 
 Dropping the mean entirely reproduces the equal-weight book on this constraint set, which is a property of the constraint set rather than a result about means: at the tightest norm the fully-invested long-only book admits, there is only one feasible weight vector, and it returns -0.573 on the same metric with a weight path that does not move at all.
 
-## RQ4 - Does the factor set matter: does either set span the other?
+## RQ4. Does the factor set matter: does either set span the other?
 
 The test runs in both directions at the retained count of 2. The named spine is not spanned by the constructed block (GRS 4.74, p 0.0098), and the reverse also rejects (GRS 2.97, p 0.0018), so neither set prices what the other does on this panel. The Huberman-Kandel condition is reported per asset rather than as one number, and the rows sum to one under spanning, which is the half of the condition a reader can check directly.
 
 The direction that matters for the rest of the build is the first: the published spine carries something the four constructed bond and credit series do not. That is why the block is reported beside the spine rather than replacing it, and why the loadings on the four construction sleeves are treated as identities rather than as estimates.
 
-## RQ5 - How many factors does this panel support, and on what evidence?
+## RQ5. How many factors does this panel support, and on what evidence?
 
 The rule retains 2 components on the full panel, and the per-window counts across the out-of-sample window take the values [1, 2], inside the pre-registered bound of 3. The rule's own falsification check does not fire (falsified: False, a move of more than one component in 0% of the steps), and the stability check on independently permuted windows agrees with the count.
 
 Two references travel with the count. The analytic Marchenko-Pastur edge for 11 series over a sixty-month window is 2.0397 to 2.0500 across the windows, and the matched permutation null the rule actually uses sits higher, at 2.0749 to 2.3301, because an independent permutation destroys the cross-sectional structure a normal null would keep. The observed top eigenvalue runs 4.2947 to 6.1801. The rule retains a component that beats the matched null rather than a component that beats an analytic line, and the evidence for the count is that comparison rather than an appeal to a common rule of thumb: Kaiser's eigenvalue-above-one rule would have retained a different, larger number here.
 
-## RQ6 - Is the risk budget consumed by design or by accident?
+## RQ6. Is the risk budget consumed by design or by accident?
 
 The budget is answered on two books: the policy benchmark, which is the mandate's own weights, and the sample's leader. Realised volatility contributions against the declared vector:
 
@@ -62,7 +66,7 @@ The largest departure on the policy book is equity, at +13.5%. Consumption is th
 
 The decomposition itself carries no unexplained residual of consequence. Euler contributions sum to portfolio volatility within 4e-16 relative on every run, and the linked attribution lands on the compounded excess with a largest residual of 2e-14. Value at risk is refused as a measure to decompose, and the refusal is measured rather than asserted: its conditional contributions do not sum to it, while the expected shortfall takes the same contributions additively.
 
-## RQ7 - What does the choice cost, and is the apparent winner exploiting estimation error?
+## RQ7. What does the choice cost, and is the apparent winner exploiting estimation error?
 
 Cost is charged on traded notional, and it separates the families by their turnover rather than by their objective. The mean-input cells trade most (45.1% a year, 0.09% of return a year at the decided rate) and the risk-based cells trade least (`erc_bounded` 1.5% a year, 0.00%). The leader's information ratio at each per-side multiple is 5 bp +0.553, 20 bp +0.526, 40 bp +0.490, so the ranking at the top multiple is a separate statement from the level at the base.
 
@@ -72,12 +76,12 @@ The second half of the question is estimation error, and the answer is uncomfort
 
 6 of the 16 distinct cells carry a verdict of no difference detected or a declared negative result, and each carries its resolution limit on the row it was read from:
 
-- **mean_variance_shrunk** - no difference detected: the advantage does not survive the bootstrap resampling
-- **maximum_diversification** - no difference detected
-- **mean_cvar** - no difference detected
-- **mean_variance_none** - negative result: the book reproduces equal weight
-- **minimum_variance_uncapped** - no difference detected
-- **maximum_diversification_uncapped** - no difference detected
+- **mean_variance_shrunk**: no difference detected: the advantage does not survive the bootstrap resampling
+- **maximum_diversification**: no difference detected
+- **mean_cvar**: no difference detected
+- **mean_variance_none**: negative result: the book reproduces equal weight
+- **minimum_variance_uncapped**: no difference detected
+- **maximum_diversification_uncapped**: no difference detected
 
 The table's resolution on a typical row is printed beside its verdict; a reader who reads 'no difference detected' as 'equivalent' is reading the second statement while appearing to make the first, which is the distinction the noise floor exists to keep visible.
 

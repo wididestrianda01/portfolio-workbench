@@ -6,7 +6,7 @@ performance: choosing the count on the results it produces and then reporting it
 Here the criterion is a **matched empirical null**. For each estimation window the null is
 built by giving every series its own independent random circular shift, which preserves each
 series' values, its marginal distribution and its autocorrelation, and destroys only the
-alignment between series - the cross-correlation the test needs a null for. A plain
+alignment between series, which is the cross-correlation the test needs a null for. A plain
 permutation of each series would also destroy the series' own serial dependence, making the
 null less correlated in time than the panel and the threshold too low, which is the wrong
 direction for a rule that decides how many factors to trust.

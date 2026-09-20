@@ -17,18 +17,18 @@ window on this panel, because the short government sleeve is far the quieter of 
 credit spread sits at -0.96 against the level. A coefficient on either half of a pair like that is
 not identified: the worst loading's variance is inflated by a factor of hundreds to thousands, where a
 design whose regressors were unrelated would give one. Projecting the block onto itself in its declared order
-leaves the level exactly as declared and gives the later series the cleaner reading - the slope net
-of the level, the credit spread net of the term structure, high yield net of credit - with the
+leaves the level exactly as declared and gives the later series the cleaner reading (the slope net
+of the level, the credit spread net of the term structure, high yield net of credit) with the
 design's conditioning back at the spine's own. Nothing is centred, because a monthly factor return's
 mean belongs to the factor model: centring would move the intercept and turn the reported alpha from
 Jensen's into the sleeve's own average return. The transform is derived from the window alone, since
 everything a window uses is inside it, and the fitted values, alphas, residual variances and shares
-of variance are **identical** under either parameterisation - only the loadings and their standard
+of variance are **identical** under either parameterisation; only the loadings and their standard
 errors change.
 
 **Four sleeves are the block, so the block is dropped from their design.** `IBGL.AS`, `IEGE.AS`,
-`IEAC.AS` and `IHYG.L` are exact linear combinations of the block - `IBGL = level + slope/2`,
-`IEGE = level - slope/2`, `IEAC = level + slope/2 + credit`, and `IHYG` adds the high-yield excess -
+`IEAC.AS` and `IHYG.L` are exact linear combinations of the block: `IBGL = level + slope/2`,
+`IEGE = level - slope/2`, `IEAC = level + slope/2 + credit`, and `IHYG` adds the high-yield excess,
 because the block is built from them. Regressing such a sleeve on a set containing its own
 construction fits it exactly, reports every other loading as zero, and destroys the one exposure that
 *is* estimable: its sensitivity to the published spine. Those sleeves are therefore regressed on the

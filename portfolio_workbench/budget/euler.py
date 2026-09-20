@@ -8,8 +8,8 @@ resembling its parts. Expected shortfall satisfies the same condition.
 
 **Value at risk does not, so VaR contributions are refused.** The refusal is verified rather than
 asserted: `var_refusal` computes the conditional contributions a VaR report normally prints and shows
-what they actually sum to. They sum to the expected shortfall, not to the value at risk - one is the
-mean of the tail and the other is its edge - so a report presenting them as VaR contributions
+what they actually sum to. They sum to the expected shortfall, not to the value at risk (one is the
+mean of the tail and the other is its edge) so a report presenting them as VaR contributions
 overstates the quantity it claims to decompose. The failing case is kept as a documented negative, and
 the positive case falls out of the same computation.
 

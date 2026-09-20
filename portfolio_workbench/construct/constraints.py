@@ -12,7 +12,7 @@ and turnover numbers are read off them.
 **A cap is not a clip.** Clipping weights at the cap and renormalising is the obvious way to enforce
 it and it is wrong twice over: the renormalisation can push a sleeve back over the cap, and it
 leaves the vector summing to something other than one by whatever the clip removed. The projection
-here solves the constrained problem instead - it clips, redistributes the excess among the sleeves
+here solves the constrained problem instead, by clipping and redistributing the excess among the sleeves
 still below the cap, and repeats until nothing is left to give. The feasible set is empty when the
 cap times the sleeve count is below one, and that is refused rather than returned as a vector that
 cannot exist.
@@ -24,8 +24,8 @@ several percent in a month, and on this panel the minimum-variance cell traded m
 turnover cap with the band in place. The cap therefore needs its own rule, and both are applied
 here, band first.
 
-**The turnover cap scales the trade vector.** The alternative - constrain the optimiser against the
-current weights - changes each constructor's objective and so changes the method under comparison,
+**The turnover cap scales the trade vector.** The alternative (constrain the optimiser against the
+current weights) changes each constructor's objective and so changes the method under comparison,
 which is exactly what the fixed constraint set exists to prevent. Scaling lands the book on a convex
 combination of where it is and where the banded target sits; both ends are feasible, so the point
 between them is, and the scaling is reported as binding rather than applied quietly. The trade it

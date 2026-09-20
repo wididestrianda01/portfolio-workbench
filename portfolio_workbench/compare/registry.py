@@ -3,7 +3,7 @@
 This file is the registration. Every run is declared here, before any of them is executed, and the
 count is fixed rather than emergent: a run added later is a dated amendment to this file and to the
 record beside it, never a row that appeared in a table. The table's authority rests on the count
-being stated in advance - a search over sixteen methods whose size is reported after the results are
+being stated in advance. A search over sixteen methods whose size is reported after the results are
 seen is a search whose size was chosen by the results.
 
 **Three stages, one axis moving in each.** Stage A varies the constructor family with the risk model
@@ -22,8 +22,8 @@ secondary protocol, so a ranking that only exists under a 60-month window is vis
 **The two protocols repeat the same cells, not different ones.** The expanding run covers the same
 out-of-sample months with each estimate using every month since the panel opened, which is the check
 that a result is not an artefact of a fixed window length. The two cells chosen for it are the two the
-mandate's own question turns on: the mean-consuming family's representative, which is the industry
-default under review, and minimum variance, which is the risk-based family's representative and the
+mandate's own question turns on: the mean-consuming family's representative, the industry
+default under review, and minimum variance, the risk-based family's representative and the
 cell the risk-model stage is built around. Both are named here before either is run.
 
 **The perturbation lifts the per-sleeve cap and changes nothing else.** It answers whether the

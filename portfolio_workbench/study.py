@@ -23,7 +23,7 @@ without giving a single further caller anything.
 
 **Where it sits.** Above the layers and below the output surface: `reporting/` reads the analysis and
 nothing here reads `reporting/`. The entry points import this module inside their own functions rather
-than at module level, because this module imports the layers those entry points live in - the same
+than at module level, because this module imports the layers those entry points live in, which is the same
 deferral the comparison table already uses to reach the loader.
 """
 

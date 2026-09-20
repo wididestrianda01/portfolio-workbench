@@ -1,6 +1,6 @@
 """Spanning, tested in both directions, and the premia the factors are credited with.
 
-The evidential core of the factor work is not which set explains more variance - it is whether
+The evidential core of the factor work is not which set explains more variance. It is whether
 one set is needed at all once the other is present. So the two sets are tested against each
 other: the **named set as benchmark with the statistical components as test assets** is the
 headline, because it asks whether the published and constructed factors describe this panel,
@@ -17,7 +17,7 @@ Two limits travel with the result and neither is a footnote. The rows-sum-to-one
 statement about a *fully invested* benchmark: it says that a portfolio of the benchmark factors
 reproduces the test asset with no residual, and one condition for that is that the exposures add
 up to the whole asset. This benchmark mixes an excess-market series with zero-cost spread series
-- the momentum, term, credit and high-yield legs invest nothing - so the condition is reported
+(the momentum, term, credit and high-yield legs invest nothing), so the condition is reported
 as computed and its failure is not read as a spanning verdict on its own; the GRS half carries
 the verdict. And **GRS assumes iid normal residuals**, which monthly ETF returns violate in the
 tails, so the statistic travels with the assumption rather than resting on it silently.

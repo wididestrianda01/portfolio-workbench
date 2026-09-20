@@ -3,7 +3,7 @@
 **Two decompositions of one number, and neither is ever added to the other.** The holding-based
 Brinson decomposition of `attribute/brinson.py` is what the committee reads: it reconciles to the
 benchmark by construction and speaks the mandate's language. This is the explanation layer - *why* the
-allocation effects came out as they did - and it decomposes the **same** active return into factor
+allocation effects came out as they did. It decomposes the **same** active return into factor
 exposures times factor returns, plus alpha, plus residual. The only legitimate sum in the system is
 that total, so the two views are printed side by side and never summed; the difference between them is
 a single named cross-view residual, and the word "reconciles" is used only where that residual is
@@ -11,7 +11,7 @@ inside a stated tolerance.
 
 **The residual is a definition check, not a modelling error.** Both views decompose the same series, so
 the cross-view residual is zero by construction and the case proves the definition rather than the
-arithmetic - which is worth having precisely because it fires when one view is silently reading a
+arithmetic, and that is worth having precisely because it fires when one view is silently reading a
 different month set, a different weight path or a different return frame. It is reported as a number
 with its scale beside it, for the same reason every other residual in this package is.
 
@@ -24,8 +24,8 @@ window is fixed, exactly as a loading is, so applying it to a month outside the 
 of extrapolation the attribution already makes with every coefficient.
 
 **The four construction sleeves are the block, so their return is attributed to the block in full.**
-Their loadings on the published spine are a summary of the same return expressed in another basis - a
-sensitivity, and a useful one - not a second decomposition of it; adding both would count their return
+Their loadings on the published spine are a summary of the same return expressed in another basis (a
+sensitivity, and a useful one) not a second decomposition of it; adding both would count their return
 twice. Their identity loadings are moved onto the orthogonal basis here so that every sleeve in the
 report is read against the same series, and their residual is exactly zero because their model is.
 

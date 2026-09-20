@@ -1,7 +1,7 @@
 """The table contract, expressed as a query over the snapshot's own files.
 
-The panel is read by pandas, and this module states the same operations the analytics depend on - the
-as-of join, the coverage report, and the assembly of the monthly euro excess return table - as SQL,
+The panel is read by pandas, and this module states the same operations the analytics depend on (the
+as-of join, the coverage report, and the assembly of the monthly euro excess return table) as SQL,
 then checks the statements against each other on the frozen snapshot. The point is not that a query is
 faster than a dataframe. It is that the contract another project has to satisfy is a *table* contract,
 and a contract written only as pandas code is one the sibling has to re-derive rather than satisfy: a

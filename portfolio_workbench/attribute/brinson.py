@@ -6,7 +6,7 @@ interaction. Its selection term is the benchmark's weight applied to the differe
 portfolio's sleeve return and the benchmark's, and in this universe those are the same number: the
 policy benchmark holds the *same instrument* for each sleeve, so `r_p,i = r_b,i` and selection is
 identically zero. The workbook therefore states that the term does not exist here, with the reason,
-rather than carrying a zero column - a column of zeros in a performance table reads as a market
+rather than carrying a zero column, since a column of zeros in a performance table reads as a market
 finding, and this one is a property of how the benchmark was built.
 
 **The currency dimension carries the interaction instead.** The euro return of a sleeve is
@@ -14,7 +14,7 @@ finding, and this one is a property of how the benchmark was built.
 allocation measured on **local-currency** returns, a currency effect that is the active weight applied
 to the translation, and the cross product of the two, which is named as its own line rather than
 folded into either. The lines then sum to the active return exactly, and measuring allocation on euro
-returns while also adding a currency line would count the translation twice - which is why the
+returns while also adding a currency line would count the translation twice, which is why the
 ordering is stated here and not left to the reader. Two limits travel with it: the dimension is
 **quotation-currency, not look-through**, since an unhedged USD holding inside a euro-quoted ETF moves
 the fund's NAV with nothing in this data to separate it; and only the SEK-quoted sleeve shows a

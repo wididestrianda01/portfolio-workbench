@@ -2,7 +2,7 @@
 
 A learning exercise performed in role: a simulated mandate with no client and no institution. Nothing in this document is investment advice, a recommendation to any person, or a client communication, and the register is deliberate.
 
-Snapshot `2026-09-13` - version 1.1 - written from 20 pre-registered runs over 16 distinct cells.
+Snapshot `2026-09-13`, version 1.1, written from 20 pre-registered runs over 16 distinct cells.
 
 ## 1. Recommendation
 

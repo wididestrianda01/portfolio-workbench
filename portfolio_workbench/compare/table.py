@@ -3,14 +3,14 @@
 The table is the deliverable the whole comparison is read from, so what it may and may not say is
 fixed here rather than decided per row.
 
-**Two testing families, and nothing else is tested.** Each cell against the policy benchmark - the
-mandate's own question - and each cell against equal weight, which is the bar the literature uses. The
+**Two testing families, and nothing else is tested.** Each cell against the policy benchmark (the
+mandate's own question) and each cell against equal weight, which is the bar the literature uses. The
 cell-versus-cell matrix is published descriptively and **never tested**: 120 pairs tested at five
 percent is where a false positive is born, and the table is the place a reader would take one from.
 
 **A verdict is a ladder, and each rung is a leg the design fixed.** A cell is reported as different
-only when it clears the declared family-wise bar - which is also the multiple-testing haircut, since
-one test of one statistic serves both - keeps rank in at least eighty percent of bootstrap resamples,
+only when it clears the declared family-wise bar (which is also the multiple-testing haircut, since
+one test of one statistic serves both) keeps rank in at least eighty percent of bootstrap resamples,
 and holds its sign under the expanding-window protocol. Anything else prints **no difference detected**
 with the resolution limit beside it. A cell whose book reproduces equal weight is a declared negative
 result rather than a small difference, and a cell that clears every leg while sitting behind the

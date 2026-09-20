@@ -2,7 +2,7 @@
 
 **Every comparison is a paired test on the difference of two monthly return series.** A single
 strategy's annualised information ratio carries a standard error near 0.30 over the 131 months this
-panel affords, so two cells compared by their separate ratios are indistinguishable by construction -
+panel affords, so two cells compared by their separate ratios are indistinguishable by construction:
 every method sits inside every other's interval. Pairing is what buys resolution, and it buys it only
 because the cells are highly correlated: same universe, same months, long-only books that mostly
 agree. The realised correlation is therefore measured and reported rather than assumed, because the
@@ -10,7 +10,7 @@ resolution quoted beside every verdict is a function of it.
 
 **The resolution is quoted in the metric's own units.** The paired standard error of the annualised
 information-ratio difference is `sqrt(12/T) * sqrt(2 * (1 - rho))` under the null, which is 0.098 at a
-correlation of 0.95 and 131 months - the figure the design's own power calculation arrived at. The
+correlation of 0.95 and 131 months, the figure the design's own power calculation arrived at. The
 smallest difference that clears the bar at eighty percent power is `2.8016 * that`, or 0.27, which is
 why a cell reported as **no difference detected** prints 0.27 beside it rather than nothing.
 
@@ -21,18 +21,18 @@ sixteen cells the declared bar on the null statistic is the Bonferroni-equivalen
 afterwards rather than being the hypothesis. The same number is the 95th percentile of the maximum of
 sixteen independent absolute standard normals to within a quarter of a percent (2.9478 measured against
 2.9552), and Bonferroni is the conservative one of the two. The one-sided quantile over the same cells
-is 2.7344 - the value this module shipped before the two readings were separated, and a bar that would
+is 2.7344 (the value this module shipped before the two readings were separated, and a bar that would
 have held the family to 9.5% rather than to the 5% it is declared at.
 The cells are positively correlated, so the effective number of tests is smaller and the honest bar
 would be lower; both numbers are printed, and the conservative one decides. The haircut is
 **self-imposed from the literature** - it sits in the same territory as the threshold that reading
-arrived at once search is accounted for - and nothing regulatory requires it. Saying so is the point:
+arrived at once search is accounted for) and nothing regulatory requires it. Saying so is the point:
 a self-imposed bar presented as a requirement would borrow an authority it does not have.
 
 **A difference is reported only when all three legs pass.** The paired bar, a leader that keeps its
 rank in at least eighty percent of bootstrap resamples, and a sign that survives the expanding-window
 protocol. Anything failing a leg is published as **no difference detected**, with the resolution limit
-beside it - which the design expects to be the verdict for several prominent methods, and which is a
+beside it, which the design expects to be the verdict for several prominent methods, and which is a
 finding rather than a failure.
 """
 

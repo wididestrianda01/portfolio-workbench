@@ -1,7 +1,7 @@
 """The engine's consumer boundary: the data contract and the five analytics entry points, in one import.
 
-A consumer of this package satisfies the table contract - one row per instrument-month carrying
-`period_month` and `available_from`, plus a manifest - and then calls the analytics through the names
+A consumer of this package satisfies the table contract (one row per instrument-month carrying
+`period_month` and `available_from`, plus a manifest) and then calls the analytics through the names
 below rather than through the layer modules directly. The indirection is not for its own sake: a module
 moved inside a layer, a function renamed or a layer split then costs one edit in this file instead of an
 edit in every consumer, and a consumer that pins the revision by tag gets a boundary whose contents it
@@ -14,7 +14,7 @@ contributions, so a consumer that runs one almost always runs the other.
 
 **What is deliberately absent.** No function is wrapped: a wrapper duplicates a signature that then
 drifts from the module's own, or becomes a second place for a convention to be stated, and the module
-headers are where those conventions live. No window, universe or mandate is applied either - those are
+headers are where those conventions live. No window, universe or mandate is applied either. Those are
 this build's own decisions, made for one panel and one mandate, and a consumer with a different mandate
 supplies its own frames and its own policy weights. The boundary carries the machinery, not the choices.
 

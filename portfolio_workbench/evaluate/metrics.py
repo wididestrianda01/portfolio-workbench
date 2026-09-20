@@ -4,7 +4,7 @@
 where the reading behind this effort found the construction choice to matter most; it is denominated
 against the same policy portfolio the mandate states; and it follows from the mandate rather than from
 a preference formed after the numbers were seen. Everything else is reported **beside** it and never
-swapped in for it - realised volatility, tracking error, turnover, drawdown, constraint-binding
+swapped in for it: realised volatility, tracking error, turnover, drawdown, constraint-binding
 frequency, the estimation-error diagnostics and the cost sensitivity. A cell that loses on the
 primary metric and wins on one of these has lost.
 

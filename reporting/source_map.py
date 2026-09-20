@@ -7,7 +7,7 @@ returns the ones with no entry here, so adding a method without stating where it
 command rather than going unnoticed.
 
 **Two kinds of source, and the map says which is which.** A method that is someone's published result
-carries the citation, taken from the effort's own research dossiers rather than from memory - the
+carries the citation, taken from the effort's own research dossiers rather than from memory: the
 author, the year, the journal, and the DOI where the dossier records one. A method that is this
 effort's own decision says so in those words and names the decision, because a decision presented as a
 citation would be the more damaging of the two errors: it claims a literature for a choice the panel
@@ -35,7 +35,7 @@ SHARED = {
         "because one instrument per sleeve leaves no selection term to compute"
     ),
     "attribute/factor.py": (
-        "the factor view of the same active return, read on the basis the coefficients were fitted in - a "
+        "the factor view of the same active return, read on the basis the coefficients were fitted in. It is a "
         "construction of this effort, not a published decomposition, and the basis convention is what makes "
         "it checkable against the holding-based total"
     ),
@@ -48,12 +48,12 @@ SHARED = {
         "axis are declared before any of them runs, and the runner charges the mandate's cost convention"
     ),
     "compare/registry.py": (
-        "the pre-registered count of this effort - sixteen distinct cells and twenty runs - declared in the "
+        "the pre-registered count of this effort (sixteen distinct cells and twenty runs), declared in the "
         "design rather than chosen after the results"
     ),
     "compare/table.py": (
-        "the verdict ladder of this effort's evaluation design, and the honesty furniture that travels with "
-        "it: the resolution limit, the negative results and the provenance block"
+        "the verdict ladder of this effort's evaluation design, and the three things that travel with every "
+        "verdict: the resolution limit, the negative results and the provenance block"
     ),
     "construct/constraints.py": (
         "the mandate's constraint set and trading conventions of this effort: long-only, fully invested, a "
@@ -187,7 +187,7 @@ OVERRIDES = {
         ),
         "ex_ante_tracking_error": (
             "the ex-ante tracking error the risk model predicts, against the ex-post one the realised "
-            "series measures - the forecast-quality pair of this effort's risk-budgeting design"
+            "series measures: the forecast-quality pair of this effort's risk-budgeting design"
         ),
         "path_contributions": (
             "component contributions along the realised path of a book rather than at one date, which is "
@@ -227,8 +227,8 @@ OVERRIDES = {
             "zero and a cumulative return near one cannot share an absolute bound"
         ),
         "provenance": (
-            "the provenance block of this effort: snapshot, protocol, cost multiple, bar - carried beside "
-            "every number because that is the rule the effort's never-shorten list fixes"
+            "the provenance block of this effort (snapshot, protocol, cost multiple, bar), carried beside "
+            "every number, because a number whose provenance is missing cannot be checked"
         ),
         "block_tables": (
             "the two stacked blocks the prototype fixed: the return and risk metrics in the first, the cost "

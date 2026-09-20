@@ -525,28 +525,68 @@ def test_the_consumer_boundary_carries_the_contract_and_the_five_entry_points():
 
 
 def test_the_prose_deliverables_are_the_ones_the_code_writes(tmp_path):
-    """The memo and the record are generated, so the copies in the repository are read against the code.
+    """The memo, the record and the guide are generated, so the copies in the repository are read
+    against the code.
 
     The drift this catches is silent, and it had happened: a sentence rewritten in the generator left
-    the published document stating the old one, and no other check reads those two files. The run
+    the published document stating the old one, and no other check reads those files. The run
     `collect` makes is the one the documents are written from, so the comparison is byte for byte -
     the price is a second pass over the stack, which is what makes the published text a fact about the
-    code rather than a file someone remembered to regenerate.
+    code rather than a file someone remembered to regenerate. All three documents are checked against
+    the one evidence object, so the check costs one pass rather than three.
 
     The writer's own path runs here too, on the same evidence, writing to a directory the fixture owns.
     It writes both files before it prints, so a fault in the confirmation line leaves the published
     documents correct and the entry point returning a failure - which is a fault only running the entry
     point shows, and one this line shows without a third pass over the stack.
+
+    The guide's glossary is checked in the direction a command can check: a term defined in the table
+    and never used in the body is a dead entry, and it fails here rather than sitting unread.
     """
+    from reporting import guide as guide_module
     from reporting import memo as memo_module
 
     root = Path(__file__).resolve().parents[1]
     evidence = memo_module.collect()
     assert (root / "reporting" / "findings-memo.md").read_text() == memo_module.memo(evidence)
     assert (root / "reporting" / "decision-record.md").read_text() == memo_module.record(evidence)
+    assert (root / "reporting" / "learning-guide.md").read_text() == guide_module.guide(evidence)
     written = memo_module.write(evidence, tmp_path / "memo.md", tmp_path / "record.md")
     assert (tmp_path / "memo.md").read_text() == memo_module.memo(evidence)
     assert written["record"].read_text() == memo_module.record(evidence)
+    assert guide_module.write(evidence, tmp_path / "guide.md").read_text() == guide_module.guide(evidence)
+
+    unused = [term for term, appears in guide_module.coverage(evidence) if not appears]
+    assert not unused, f"glossary terms the guide defines and never uses: {unused}"
+
+
+def test_the_figures_exist_and_draw_no_instrument_series():
+    """The figures are tracked artifacts, so they are read off disk rather than regenerated here.
+
+    Two checks, both about the licence posture rather than about the drawing. Every figure the guide
+    references is present and carries text, because a figure whose labels were written as glyph
+    outlines is a figure a reader cannot search or quote. And no figure names an instrument: a chart
+    of a sleeve's price or level would publish a series the feed's terms do not permit, and it could
+    not be drawn without naming what it plots. The construction-time refusal of a level *kind* is the
+    other half of the same rule, and it lives in the module that would have to draw one.
+    """
+    from reporting import figures as figures_module
+    from reporting import guide as guide_module
+
+    root = Path(__file__).resolve().parents[1]
+    referenced = [
+        root / "reporting" / "figures" / name for name, _ in guide_module.FIGURES_USED.values()
+    ]
+    assert referenced, "the guide references no figures"
+    for path in referenced:
+        assert path.exists(), f"{path.name} is referenced by the guide and absent from the repository"
+        text = path.read_text()
+        assert len(text.split()) > 20, f"{path.name} carries no text"
+        assert "<text" in text, f"{path.name} was written with glyph outlines rather than text"
+        named = [ticker for ticker in universe.TICKERS if ticker in text]
+        assert not named, f"{path.name} names an instrument, so it may be drawing a series: {named}"
+    for kind in ("price", "level", "nav", "index_level"):
+        assert kind not in figures_module.KINDS, f"{kind} is a drawable kind of quantity"
 
 
 def test_every_method_is_traced_to_a_cited_source():
