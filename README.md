@@ -214,10 +214,19 @@ it, so reordering the map would misalign weights against returns without raising
 
 ## What it found
 
-**No cell cleared every rung of the declared ladder, so the negative result is the finding.** The
-sample's leader cleared the family-wise bar and failed the rank-retention rung, keeping its rank in
-only 67.5% of bootstrap resamples against the 80% floor declared in advance. Eight of the runs that do
-clear the bar sit significantly behind the policy benchmark once cost is charged.
+**The ranking is unresolved, and the advantage is not.** No cell cleared every rung of the declared
+ladder, so the design nominates none: the sample's leader cleared the family-wise bar, kept the sign of
+its own advantage in 95.9% of bootstrap resamples and held it under the expanding protocol, and failed
+only the rung that asks whether one cell is uniquely best, keeping its rank in 67.5% of the same
+resamples against the 80% floor. Those are two different questions, and the row reports both: an
+advantage the resampling keeps, and an ordering it does not.
+
+**What the same table supports is the mean input.** All three cells carrying a mean clear the
+family-wise bar on their own row (z 4.05, 3.91 and 3.37 against 2.9552), keeping the sign of the
+advantage in 96%, 95% and 90% of resamples, while the same construction with no mean clears nothing and
+returns -0.573. Which of the three to hold is not resolvable here: the leading two sit 0.027 apart on
+the information ratio against a resolution of 0.51 on that row. Eight of the runs that clear the bar
+sit significantly behind the policy benchmark once cost is charged.
 
 ![Every cell's tracking error against its information ratio.](reporting/figures/fig1-cell-dispersion.svg)
 
@@ -236,9 +245,9 @@ book departs from its declared split, and the constructed books depart further.*
 
 **What separates the families is tracking error rather than return.** The family cells span a tracking
 error of several percentage points a year, and that dispersion is large relative to what the test can
-resolve, which makes the family the axis that matters most on this panel. The direction is not the one
-a ranking would suggest: the cells that differ from the benchmark differ by taking more risk away from
-it, not by earning more.
+resolve, which makes the family the axis that matters most on this panel. The direction cuts both ways:
+eight cells that clear the bar sit behind the benchmark after cost, and the three that sit ahead of it
+are the ones carrying a mean input.
 
 **The mean axis shows how much the input carries.** The three mean-carrying cells land close to one
 another on the information ratio, and all three move their weight path substantially month to month.
@@ -260,9 +269,13 @@ and `reporting/figures/fig5-eigenvalues.svg`.
 flowchart TD
     C[A run, measured against the policy benchmark over the traded months] --> Q1{Does the paired test clear the family-wise bar?}
     Q1 -->|no| V1[no difference detected<br/>with the resolution limit printed beside it]
-    Q1 -->|yes| Q2{Does it keep its rank in 80% of bootstrap resamples?}
+    Q1 -->|yes| Q2{Does the cell's own advantage keep its sign in 80% of bootstrap resamples?}
     Q2 -->|no| V2[no difference detected<br/>the advantage does not survive resampling]
-    Q2 -->|yes| Q3{Does the sign hold under the expanding protocol?}
+    Q2 -->|yes| Q4{Is the row the sample's leader whose rank is not retained?}
+    Q4 -->|yes| V6[the advantage clears every bar<br/>and no cell is uniquely best]
+    Q4 -->|no| Q5{Is the advantage positive after cost?}
+    Q5 -->|no| V7[significantly behind the benchmark once the cost is charged]
+    Q5 -->|yes| Q3{Does the sign hold under the expanding protocol?}
     Q3 -->|no| V3[no difference detected<br/>the sign does not hold]
     Q3 -->|not run| V4[different on the paired test<br/>the expanding leg was not run]
     Q3 -->|yes| V5[recommendation candidate]
@@ -270,8 +283,9 @@ flowchart TD
 
 | Verdict | What it means |
 | --- | --- |
-| A difference | The bar, the rank retention and the expanding-window sign all passed |
-| No difference detected | The difference is smaller than this panel can resolve, or it failed a later rung |
+| A recommendation candidate | Every rung passed: the bar, the cell's own sign retention, the rank retention and the expanding-window sign |
+| No unique leader | The advantage cleared every bar about the cell, and the ranking of the cells was not resolved. The design nominates no cell, so this is a refusal to choose between them rather than an absence of an advantage |
+| No difference detected | The difference is smaller than this panel can resolve, or it failed a rung about the cell itself |
 | A declared negative result | The book reproduces equal weight, which is a property of the constraint set |
 | Significantly behind | Different from the benchmark on the paired test, and behind it after cost |
 
@@ -291,10 +305,11 @@ a choice.
 printed on every row, and a difference that is reported comes with the three conditions that produced
 it.
 
-**The leader's advantage has the two signatures of estimation error.** An advantage that does not
-survive resampling, and a weight path that moves when the estimation window shifts by a single month,
-are what a method exploiting the sample looks like. Both are present here, and the weight-stability
-diagnostic is reported for every cell so that a reader can see it rather than take it on trust.
+**The leader has an advantage the resampling keeps and a rank it does not.** The advantage survives
+every rung about the cell itself; the ordering of the near-tied cells does not, and the leader's weight
+path moves 6.91% a month where a fixed-weight book's moves not at all. That movement is the signature
+of a method leaning on its estimates, and the weight-stability diagnostic is reported for every cell so
+that a reader can see it rather than take it on trust.
 
 **The residuals are named rather than absorbed.** The attribution reconciles after linking, the Euler
 contributions sum to portfolio volatility, and the factor model's unexplained part is reported as its
@@ -308,21 +323,30 @@ universe rather than about construction in general.
 
 ## The conclusion
 
-**Retain the policy benchmark and change nothing.** The chosen option is the one already held, so its
-cost is nil, and the alternative was to pay a construction cost to move to a book whose advantage the
-data does not support. The practical value runs in two directions: the exercise quantifies how much of a
-methodological choice survives when cost, multiple testing and resampling are charged against it, which
-is a more useful quantity than a ranking of in-sample fits; and it is a worked example of the whole
+**Move the objective to a mean-input mean-variance construction, and do not claim a variant.** The
+pre-registered ladder nominates no cell, because the leader failed the rung that asks whether one cell
+is uniquely best; the recommendation is made one level up, on the axis those cells share, where all
+three clear the same family-wise bar and the no-mean control does not. The variant is not named,
+because the leading two are 0.027 apart against a resolution of 0.51. Hold it as a partial tilt rather
+than a replacement: the family trades 41.3% to 45.1% a year in one-way turnover and costs 0.08% to 0.09%
+of return a year, which its advantage survives, and the tilt is sized so that the mandate's volatility
+and its declared risk budget stay where the mandate put them.
+
+The practical value runs in two directions: the exercise quantifies how much of a methodological choice
+survives when cost, multiple testing and resampling are charged against it, which is a more useful
+quantity than a ranking of in-sample fits, and it keeps apart the two questions resampling can answer -
+whether an advantage is measured, and whether a ranking is; and it is a worked example of the whole
 chain, from a licensed data source through a look-ahead-free panel, a documented risk model, constrained
 construction, a paired out-of-sample evaluation and two decompositions, with every number traceable to
 the module that computed it.
 
-The recommendation is withdrawn or revisited on any of five conditions: a rerun that no longer
-reproduces the metric table within the stated tolerance; a cell that clears the bar, keeps its rank in at
-least 80% of resamples and holds its sign under the expanding protocol; a longer panel on which an
-absent difference remains absent while the resolution limit falls below it; a revised cost multiple that
-removes the leader's advantage; or a change to the constraint set that would make a family's result a
-result about the constraints.
+The recommendation is withdrawn or revisited on any of six conditions: a rerun that no longer
+reproduces the metric table within the stated tolerance; the mean-carrying cells losing the bar or the
+sign of their advantage; the per-sleeve cap binding far enough that the result becomes one about the
+constraint set; a decision to treat the declared risk budget as a constraint rather than a report; a
+cell that clears the bar, keeps the sign of its own advantage in at least 80% of resamples, holds that
+sign under the expanding protocol and keeps its rank in at least 80% of the same resamples; or a longer
+panel on which an absent difference remains absent while the resolution limit falls below it.
 
 Nothing here is a claim about a live book, a client or a regulated activity. The numbers quoted above
 are the few that define the outcome; the full set is generated from the run by the documents below, and
